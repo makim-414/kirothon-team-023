@@ -6,17 +6,24 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 ## Glossary
 
-- **Album_MCP_Server**: The Python FastMCP server that provides tools for photo library access and classification
+- **Album_MCP_Server**: The Python FastMCP server that provides tools for photo library access and classification. The Album_MCP_Server contains no LLM; all classification decisions are made by the AI_Assistant
 - **Photos_Library**: The macOS Photos app library containing user photos and screenshots
 - **Capture**: A screenshot or photo stored in the Photos_Library
-- **Classification_DB**: The local SQLite database storing capture metadata, OCR results, classifications, and tags
+- **Screenshot**: A Capture that osxphotos flags as a screenshot
+- **General_Photo**: A Capture in the Photos_Library that is not a Screenshot
+- **Classification_DB**: The local SQLite database storing capture metadata, OCR results, classifications, tags, and the last successful sync time
 - **AI_Assistant**: The external AI system (Kiro or Claude) that calls MCP tools to classify and search captures
+- **MCP_Client**: The local process (Kiro or Claude Desktop) that launches the Album_MCP_Server and communicates with the Album_MCP_Server over stdio
 - **Event_Capture**: A Capture classified as containing date/time information requiring calendar entry
-- **Album_Calendar**: The dedicated calendar named "Rollcall" for storing events from captures
+- **Album_Calendar**: The dedicated macOS Calendar calendar named "앨범 MCP" for storing events from captures
 - **OCR_Text**: Extracted text from a Capture in Korean or English
 - **Apple_Label**: Apple's built-in image recognition label (e.g., "Car", "Screenshot", "Document")
 - **Preview_Grid**: A numbered composite image showing multiple capture thumbnails for AI visual selection
 - **Capture_Kind**: Classification category: event, insight, reference, or other
+- **Local_Preview**: The derivative image that the Photos_Library stores on the Mac when the original file is stored only in iCloud
+- **Steering_Document**: The Kiro steering markdown file that instructs the AI_Assistant how to use the Album_MCP_Server tools
+- **Capture_Hook**: The Kiro agent hook named "새 캡처 정리" stored in `.kiro/hooks/`
+- **Indexing_CLI**: The command-line entry point of the Album_MCP_Server that runs OCR and Apple_Label indexing without AI classification
 
 ## Requirements
 
@@ -26,11 +33,14 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls sync_captures with a timestamp, THE Album_MCP_Server SHALL return all Captures created after that timestamp
-2. THE Album_MCP_Server SHALL filter results to include only screenshots and exclude other photo types
-3. THE Album_MCP_Server SHALL return capture metadata including id, creation date, and file path
-4. WHEN a Capture's original file is stored only in iCloud, THE Album_MCP_Server SHALL use the local preview instead of downloading the original
-5. FOR ALL returned Captures, the creation date SHALL be accurate within 1 second of the Photos_Library timestamp
+1. WHEN the AI_Assistant calls sync_captures with an ISO 8601 `since` timestamp, THE Album_MCP_Server SHALL find up to 1000 Screenshots created after the `since` timestamp and, for each Screenshot not yet stored, extract OCR_Text and Apple_Label and store the OCR_Text and Apple_Label in the Classification_DB
+2. IF the `since` value is malformed or later than the current time, THEN THE Album_MCP_Server SHALL return an error indicating an invalid timestamp
+3. THE Album_MCP_Server SHALL identify Screenshots using the osxphotos screenshot flag and exclude other media from capture synchronization
+4. WHEN sync_captures completes, THE Album_MCP_Server SHALL return for each synchronized Screenshot the id, the creation date in ISO 8601 format, and whether a local original or only a Local_Preview was available
+5. WHEN the original file of a Screenshot exists only in iCloud, THE Album_MCP_Server SHALL use the Local_Preview and SHALL NOT download the original
+6. WHEN no new Screenshots exist after the `since` timestamp, THE Album_MCP_Server SHALL return an empty result without an error
+7. WHEN sync_captures is run again over an already synchronized period, THE Album_MCP_Server SHALL keep exactly one capture record per Screenshot in the Classification_DB
+8. WHEN the AI_Assistant calls sync_captures without a `since` value, THE Album_MCP_Server SHALL use the last successful sync time stored in the Classification_DB
 
 ### Requirement 2: Unprocessed Capture Queue
 
@@ -38,10 +48,12 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls inbox with count n, THE Album_MCP_Server SHALL return up to n Captures that have not been classified
-2. THE Album_MCP_Server SHALL order unprocessed Captures by creation date ascending
-3. WHEN fewer than n unprocessed Captures exist, THE Album_MCP_Server SHALL return all available unprocessed Captures
-4. THE Album_MCP_Server SHALL include OCR_Text and Apple_Label for each returned Capture
+1. WHEN the AI_Assistant calls inbox with count n, THE Album_MCP_Server SHALL return up to n Captures that have not been classified, ordered by creation date ascending
+2. WHEN the AI_Assistant calls inbox without a count, THE Album_MCP_Server SHALL use a count of 20
+3. IF n is less than 1 or greater than 100, THEN THE Album_MCP_Server SHALL return an error indicating an invalid count
+4. WHEN inbox returns a Capture, THE Album_MCP_Server SHALL include the OCR_Text of the Capture, using an empty string when no OCR_Text exists
+5. WHEN inbox returns a Capture, THE Album_MCP_Server SHALL include the Apple_Label list of the Capture, using an empty list when no Apple_Label exists
+6. WHEN fewer than n unclassified Captures exist, THE Album_MCP_Server SHALL return all unclassified Captures
 
 ### Requirement 3: OCR Text Extraction
 
@@ -49,11 +61,10 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN a new Capture is synchronized, THE Album_MCP_Server SHALL extract OCR_Text in Korean and English
-2. THE Album_MCP_Server SHALL store the OCR_Text in the Classification_DB linked to the Capture id
-3. WHEN OCR extraction fails, THE Album_MCP_Server SHALL store an empty string and log the error
-4. THE Album_MCP_Server SHALL preserve text layout information including line breaks and spacing
-5. FOR ALL Captures with visible text, OCR accuracy SHALL exceed 90% for clearly rendered characters
+1. WHEN a new Screenshot is synchronized, THE Album_MCP_Server SHALL extract OCR_Text in Korean and English using on-device macOS Vision text recognition
+2. WHEN OCR_Text is extracted, THE Album_MCP_Server SHALL store the OCR_Text in the Classification_DB linked to the Capture id
+3. WHEN OCR_Text is extracted, THE Album_MCP_Server SHALL preserve the line breaks of the recognized text
+4. IF OCR extraction fails or exceeds 30 seconds for a Capture, THEN THE Album_MCP_Server SHALL store an empty string as the OCR_Text, log the failure, and continue processing the remaining Captures
 
 ### Requirement 4: Apple Label Extraction
 
@@ -61,10 +72,9 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN a new Capture is synchronized, THE Album_MCP_Server SHALL retrieve all Apple_Label values from the Photos_Library
-2. THE Album_MCP_Server SHALL store Apple_Label values in the Classification_DB linked to the Capture id
-3. WHEN no Apple_Label exists for a Capture, THE Album_MCP_Server SHALL store an empty list
-4. THE Album_MCP_Server SHALL preserve all Apple_Label values without modification
+1. WHEN a new Screenshot is synchronized, THE Album_MCP_Server SHALL store the Apple_Label values in the Classification_DB exactly as osxphotos returns the Apple_Label values, linked to the Capture id
+2. WHEN no Apple_Label exists for a Capture, THE Album_MCP_Server SHALL store an empty list
+3. IF Apple_Label retrieval fails for a Capture, THEN THE Album_MCP_Server SHALL store an empty list and continue processing the remaining Captures
 
 ### Requirement 5: Capture Classification
 
@@ -72,11 +82,14 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls file_capture with id, kind, summary, and tags, THE Album_MCP_Server SHALL store the classification in the Classification_DB
-2. THE Album_MCP_Server SHALL validate that kind is one of: "event", "insight", "reference", or "other"
-3. THE Album_MCP_Server SHALL reject classifications where summary exceeds 200 characters
-4. THE Album_MCP_Server SHALL store tags as a list of strings in the Classification_DB
-5. WHEN a Capture is classified twice, THE Album_MCP_Server SHALL update the existing classification record
+1. WHEN the AI_Assistant calls file_capture with a valid id, kind, summary, and tags, THE Album_MCP_Server SHALL store the classification in the Classification_DB and return a confirmation
+2. IF kind is not one of "event", "insight", "reference", or "other", THEN THE Album_MCP_Server SHALL return an error indicating an invalid kind
+3. IF summary exceeds 200 characters, THEN THE Album_MCP_Server SHALL return an error indicating the summary is too long
+4. IF tags contains more than 20 entries or any tag exceeds 50 characters, THEN THE Album_MCP_Server SHALL return an error indicating invalid tags
+5. IF the id does not match a Capture in the Classification_DB, THEN THE Album_MCP_Server SHALL return an error indicating the Capture was not found
+6. IF id, kind, or summary is empty, THEN THE Album_MCP_Server SHALL return an error indicating invalid input
+7. WHEN a Capture that is already classified is classified again, THE Album_MCP_Server SHALL replace the existing classification with the new classification
+8. IF storing the classification fails, THEN THE Album_MCP_Server SHALL leave the existing classification data of the Capture unchanged and return an error
 
 ### Requirement 6: Calendar Event Creation
 
@@ -84,12 +97,16 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls add_event with capture_id, title, start, end, and place, THE Album_MCP_Server SHALL create an event in the Album_Calendar
-2. THE Album_MCP_Server SHALL store the capture_id in the event's notes field
-3. THE Album_MCP_Server SHALL validate that start time is before or equal to end time
-4. WHEN place is provided, THE Album_MCP_Server SHALL set the event location field
-5. WHEN the Album_Calendar does not exist, THE Album_MCP_Server SHALL create it before adding the event
-6. THE Album_MCP_Server SHALL return the created event's calendar id
+1. WHEN the AI_Assistant calls add_event with capture_id, title, an ISO 8601 start, and an optional ISO 8601 end and place, THE Album_MCP_Server SHALL create an event in the Album_Calendar and return the created event id
+2. IF capture_id or title is empty, THEN THE Album_MCP_Server SHALL return an error indicating invalid input
+3. IF start or end is not a valid ISO 8601 date-time, THEN THE Album_MCP_Server SHALL return an error indicating an invalid date-time
+4. IF start is later than end, THEN THE Album_MCP_Server SHALL return an error indicating an invalid time range
+5. WHEN end is omitted, THE Album_MCP_Server SHALL set the event end to one hour after start
+6. WHEN place is provided, THE Album_MCP_Server SHALL set the event location to the place value
+7. WHEN an event is created, THE Album_MCP_Server SHALL write the capture_id into the event notes
+8. WHEN the Album_Calendar does not exist, THE Album_MCP_Server SHALL create the Album_Calendar before adding the event
+9. IF Calendar access is denied or the Album_Calendar cannot be created, THEN THE Album_MCP_Server SHALL return an error explaining how to grant Calendar permission in macOS privacy settings
+10. THE Album_MCP_Server SHALL write events only to the Album_Calendar and SHALL NOT modify other calendars
 
 ### Requirement 7: Natural Language Search
 
@@ -97,12 +114,20 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls search with query, kind, and period, THE Album_MCP_Server SHALL return matching Captures ranked by relevance
-2. THE Album_MCP_Server SHALL search across summary, tags, OCR_Text, and Apple_Label fields
-3. WHEN kind is specified, THE Album_MCP_Server SHALL filter results to that Capture_Kind
-4. WHEN period is specified, THE Album_MCP_Server SHALL filter results to Captures created within that date range
-5. THE Album_MCP_Server SHALL return up to 50 results ordered by relevance score descending
-6. FOR ALL search queries, response time SHALL be under 2 seconds
+1. WHEN the AI_Assistant calls search with a query, THE Album_MCP_Server SHALL search all Captures in the Photos_Library, including Screenshots and General_Photos
+2. WHEN search evaluates a Screenshot, THE Album_MCP_Server SHALL match the query against summary, tags, OCR_Text, and Apple_Label
+3. WHEN search evaluates a General_Photo, THE Album_MCP_Server SHALL match the query against Apple_Label, date, and place metadata from osxphotos
+4. THE Album_MCP_Server SHALL match query terms by case-insensitive substring comparison
+5. THE Album_MCP_Server SHALL score each match with field weights of 4 for summary, 3 for tags, 2 for OCR_Text, and 1 for Apple_Label
+6. WHEN kind is specified, THE Album_MCP_Server SHALL return only classified Captures of that Capture_Kind
+7. WHEN period is specified as an ISO 8601 start and end, THE Album_MCP_Server SHALL return only Captures created within that period
+8. THE Album_MCP_Server SHALL return up to 50 results ordered by score descending, then by creation date descending
+9. WHEN search returns a result, THE Album_MCP_Server SHALL include the id, creation date, kind (null when unclassified), summary (null when absent), and matched fields
+10. WHILE the Photos_Library contains up to 50,000 photos, THE Album_MCP_Server SHALL complete each search within 2 seconds
+11. WHEN query is empty and kind or period is specified, THE Album_MCP_Server SHALL return Captures matching the filters, so that label-only and period-only searches can widen candidates for visual confirmation
+12. IF query is empty and neither kind nor period is specified, THEN THE Album_MCP_Server SHALL return an error indicating invalid input
+13. WHEN no Captures match, THE Album_MCP_Server SHALL return an empty list
+14. IF kind or period is invalid, THEN THE Album_MCP_Server SHALL return an error indicating the invalid parameter
 
 ### Requirement 8: Visual Preview Generation
 
@@ -110,12 +135,14 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls look_at with a list of ids, THE Album_MCP_Server SHALL generate a Preview_Grid containing all specified Captures
-2. THE Album_MCP_Server SHALL overlay each thumbnail with its position number (1, 2, 3, ...)
-3. THE Album_MCP_Server SHALL arrange thumbnails in a grid layout with maximum 4 columns
-4. THE Album_MCP_Server SHALL resize each thumbnail to 400x400 pixels maximum while preserving aspect ratio
-5. THE Album_MCP_Server SHALL return the Preview_Grid as a base64-encoded image
-6. WHEN any specified id does not exist, THE Album_MCP_Server SHALL skip that id and include only valid Captures
+1. WHEN the AI_Assistant calls look_at with a list of ids, THE Album_MCP_Server SHALL generate a Preview_Grid from the first 50 ids and ignore any additional ids
+2. WHEN a Preview_Grid is generated, THE Album_MCP_Server SHALL overlay each thumbnail with a number from 1 to N in the order of the given ids
+3. THE Album_MCP_Server SHALL arrange Preview_Grid thumbnails in at most 4 columns
+4. THE Album_MCP_Server SHALL resize each thumbnail so the long edge is at most 400 pixels while preserving aspect ratio
+5. WHEN a Preview_Grid is generated, THE Album_MCP_Server SHALL return the Preview_Grid as MCP PNG image content together with the mapping from each number to its Capture id
+6. WHEN an id does not match a Capture, THE Album_MCP_Server SHALL skip that id and include only valid Captures
+7. IF none of the given ids match a Capture, THEN THE Album_MCP_Server SHALL return an error indicating no valid Captures
+8. WHEN the original file of a Capture exists only in iCloud, THE Album_MCP_Server SHALL use the Local_Preview for the thumbnail
 
 ### Requirement 9: Single Photo Retrieval
 
@@ -123,11 +150,12 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls get_photo with an id, THE Album_MCP_Server SHALL return the Capture as a base64-encoded image
-2. THE Album_MCP_Server SHALL include metadata: creation date, dimensions, file size, OCR_Text, Apple_Label, and classification
-3. WHEN the original file is stored only in iCloud, THE Album_MCP_Server SHALL use the highest-resolution local preview
-4. WHEN the id does not exist, THE Album_MCP_Server SHALL return an error message
-5. THE Album_MCP_Server SHALL return images in JPEG format with 90% quality
+1. WHEN the AI_Assistant calls get_photo with an id, THE Album_MCP_Server SHALL return the Capture as MCP JPEG image content at quality 90 with the long edge capped at 2048 pixels
+2. WHEN get_photo returns a Capture, THE Album_MCP_Server SHALL include creation_date, dimensions, file_size, OCR_Text, Apple_Label, and classification, using null for absent values
+3. WHEN the original file exists only in iCloud, THE Album_MCP_Server SHALL use the largest available Local_Preview
+4. IF the id does not match a Capture, THEN THE Album_MCP_Server SHALL return a not found error
+5. IF the image file of the Capture cannot be read, THEN THE Album_MCP_Server SHALL return an unavailable error
+6. IF the id is empty, THEN THE Album_MCP_Server SHALL return an invalid input error
 
 ### Requirement 10: Batch Photo Export
 
@@ -135,11 +163,16 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls export_photos with ids and folder, THE Album_MCP_Server SHALL copy all specified Captures to the folder
-2. THE Album_MCP_Server SHALL name exported files using the pattern: {original_name}_{capture_id}.{extension}
-3. WHEN the folder does not exist, THE Album_MCP_Server SHALL create it
-4. WHEN any id does not exist, THE Album_MCP_Server SHALL skip that id and export only valid Captures
-5. THE Album_MCP_Server SHALL return a list of successfully exported file paths
+1. WHEN the AI_Assistant calls export_photos with ids and a local folder path, THE Album_MCP_Server SHALL copy each matching Capture to the folder and return the exported file paths and the skipped ids
+2. IF ids is empty or contains more than 100 entries, THEN THE Album_MCP_Server SHALL return an error indicating an invalid id list
+3. IF the folder is not a local file system path, THEN THE Album_MCP_Server SHALL return an error indicating an invalid folder
+4. WHEN the folder does not exist, THE Album_MCP_Server SHALL create the folder including missing parent folders
+5. IF the folder cannot be created or written because of a permission failure, THEN THE Album_MCP_Server SHALL return an error indicating the permission failure
+6. THE Album_MCP_Server SHALL name each exported file `{original_name}_{capture_id}.{ext}`
+7. IF a file with the target name already exists, THEN THE Album_MCP_Server SHALL append a numeric suffix to the new file name and SHALL NOT overwrite the existing file
+8. WHEN an id does not match a Capture, THE Album_MCP_Server SHALL skip that id and list the id as skipped
+9. WHEN the original file of a Capture exists only in iCloud, THE Album_MCP_Server SHALL export the Local_Preview and mark the exported entry as a preview in the result
+10. THE Album_MCP_Server SHALL export by copying files and SHALL NOT modify the Photos_Library
 
 ### Requirement 11: Local-Only Data Storage
 
@@ -147,10 +180,11 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. THE Album_MCP_Server SHALL store all metadata in a local Classification_DB file
-2. THE Album_MCP_Server SHALL access Photos_Library files only via local file system paths
-3. THE Album_MCP_Server SHALL process all images locally without network requests
-4. THE Album_MCP_Server SHALL reject any configuration that would transmit photo data to external services
+1. THE Album_MCP_Server SHALL store the Classification_DB as a local SQLite file in `~/Library/Application Support/album-mcp/` by default
+2. WHERE the Classification_DB path environment variable is set, THE Album_MCP_Server SHALL store the Classification_DB at the path given by the environment variable
+3. THE Album_MCP_Server SHALL NOT make outbound network requests
+4. THE Album_MCP_Server SHALL produce OCR_Text, Apple_Label data, and thumbnails on-device
+5. THE Album_MCP_Server SHALL return image data only to the calling MCP_Client over local stdio
 
 ### Requirement 12: Read-Only Photo Library Access
 
@@ -158,10 +192,9 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. THE Album_MCP_Server SHALL open Photos_Library in read-only mode
-2. THE Album_MCP_Server SHALL reject any operation that would modify Photos_Library metadata
-3. THE Album_MCP_Server SHALL reject any operation that would delete or move photos in the Photos_Library
-4. WHEN osxphotos attempts a write operation, THE Album_MCP_Server SHALL raise an error before execution
+1. THE Album_MCP_Server SHALL open the Photos_Library in read-only mode through osxphotos
+2. THE Album_MCP_Server SHALL NOT expose any MCP tool that modifies, adds, deletes, or moves photos, albums, or Photos_Library metadata
+3. THE Album_MCP_Server SHALL store classifications only in the Classification_DB
 
 ### Requirement 13: Database Schema Management
 
@@ -169,11 +202,9 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the Album_MCP_Server starts and the Classification_DB does not exist, THE Album_MCP_Server SHALL create it with the current schema
-2. THE Album_MCP_Server SHALL store schema version in the Classification_DB
-3. WHEN the Classification_DB schema version is older than the code version, THE Album_MCP_Server SHALL apply migrations automatically
-4. THE Album_MCP_Server SHALL log all schema changes to the console
-5. WHEN a migration fails, THE Album_MCP_Server SHALL restore the previous database state from backup
+1. WHEN the Album_MCP_Server starts and the Classification_DB does not exist, THE Album_MCP_Server SHALL create the Classification_DB with the current schema and store the schema version
+2. WHEN the Album_MCP_Server starts and the stored schema version is older than the code schema version, THE Album_MCP_Server SHALL apply all pending migrations in a single transaction
+3. IF a migration fails, THEN THE Album_MCP_Server SHALL roll back the transaction, log the failure, and exit with a non-zero status
 
 ### Requirement 14: Error Handling and Logging
 
@@ -181,11 +212,10 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN any MCP tool encounters an error, THE Album_MCP_Server SHALL return a structured error response with error type and message
-2. THE Album_MCP_Server SHALL log all tool invocations with parameters to the console at INFO level
-3. THE Album_MCP_Server SHALL log all errors with stack traces to the console at ERROR level
-4. WHEN Photos_Library access fails, THE Album_MCP_Server SHALL return an error message indicating permission issues
-5. THE Album_MCP_Server SHALL include request id in all log messages for tracing
+1. WHEN any MCP tool encounters an error, THE Album_MCP_Server SHALL return a structured error containing `error_type` and `message`
+2. WHEN an MCP tool call completes, THE Album_MCP_Server SHALL log the tool name and duration to stderr, keeping stdout reserved for MCP stdio
+3. THE Album_MCP_Server SHALL NOT write OCR_Text or image data to logs
+4. IF Photos_Library or Calendar access fails because of missing permission, THEN THE Album_MCP_Server SHALL return an error naming the macOS privacy setting to grant
 
 ### Requirement 15: MCP Server Configuration
 
@@ -193,11 +223,10 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. THE project SHALL include an mcp.json file with server configuration for Kiro
-2. THE project SHALL include a Claude configuration example showing server setup
-3. THE project SHALL include a README with installation and configuration instructions
-4. THE configuration files SHALL specify the Python interpreter path and server entry point
-5. THE configuration files SHALL specify required environment variables if any
+1. THE project SHALL include a Kiro `.kiro/settings/mcp.json` file defining the Album_MCP_Server with `command`, `args`, and `env`
+2. THE project SHALL include a Claude Desktop `claude_desktop_config.json` example defining the Album_MCP_Server with the same `command`, `args`, and `env` fields
+3. THE project configuration files SHALL launch the Album_MCP_Server using either the absolute path to the project virtual environment Python or `uv run`
+4. THE README SHALL document installation, required macOS permissions, configuration file locations, and how to verify the MCP_Client connection
 
 ### Requirement 16: Steering Document
 
@@ -205,24 +234,27 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. THE project SHALL include a steering document describing the three core workflows
-2. THE steering document SHALL specify the tool call sequence for the accumulation workflow
-3. THE steering document SHALL specify the tool call sequence for the event creation workflow
-4. THE steering document SHALL specify the tool call sequence for the retrieval workflow
-5. THE steering document SHALL include example queries and expected tool usage patterns
+1. THE Steering_Document SHALL describe the accumulation, event, and retrieval workflows, each with purpose, inputs, outputs, tool call order, and data flow
+2. THE Steering_Document SHALL specify failure handling for each tool as retry, skip, or abort
+3. THE Steering_Document SHALL include at least one example query for each workflow
+4. THE Steering_Document SHALL state the two-step retrieval rule: use search to narrow candidates, then use look_at to confirm visually before calling get_photo or answering
+5. THE Steering_Document SHALL state that the AI_Assistant decides the kind, summary, tags, and events of each Capture
+6. THE Steering_Document SHALL instruct the AI_Assistant to call add_event only when a Capture contains an explicit date, resolving relative dates against the Capture creation date
 
 ### Requirement 17: Automated Capture Processing
 
-**User Story:** As a user, I want new captures automatically processed on a schedule, so that my capture inbox stays current.
+**User Story:** As a user, I want new captures automatically processed, so that my capture inbox stays current.
 
 #### Acceptance Criteria
 
-1. THE project SHALL include a Kiro hook that triggers periodic capture processing
-2. THE hook SHALL call sync_captures to find new captures since last run
-3. THE hook SHALL call inbox to retrieve unprocessed captures
-4. THE hook SHALL invoke the AI_Assistant to classify each unprocessed capture
-5. THE hook SHALL run on a configurable schedule (default: every 30 minutes)
-6. WHEN the hook fails, THE hook SHALL log the error and retry on the next scheduled run
+1. THE project SHALL include the Capture_Hook as a Kiro agent hook in `.kiro/hooks/`
+2. WHEN a Kiro session starts, THE Capture_Hook SHALL instruct the AI_Assistant to call sync_captures, then inbox, then file_capture for each returned Capture, then add_event for each Event_Capture with an explicit date
+3. WHEN the user triggers the Capture_Hook manually, THE Capture_Hook SHALL run the same processing sequence as at session start
+4. WHEN the Capture_Hook calls sync_captures, THE Capture_Hook SHALL omit `since` so that the Album_MCP_Server uses the last successful sync time (Requirement 1.8)
+5. WHILE the Capture_Hook is processing, THE Capture_Hook SHALL request at most 20 Captures per inbox call and repeat until inbox returns no Captures or 100 Captures have been processed
+6. IF classification of a Capture fails, THEN THE Capture_Hook SHALL leave the Capture unclassified so that the Capture remains in the inbox for the next run
+7. THE README SHALL document an optional launchd example that runs the Indexing_CLI at a fixed clock interval to perform OCR and Apple_Label indexing without AI classification
+
 ### Requirement 18: Multiple Capture Sources
 **User Story:** As a user who also uses an Android phone or keeps screenshots outside Photos, I want to index image folders too, so that all my captures are searchable in one place.
 #### Acceptance Criteria

@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-album-mcp = "album_mcp.server:main"
+album-mcp = "album_mcp.cli:main"
 
 [project.optional-dependencies]
 google = [
