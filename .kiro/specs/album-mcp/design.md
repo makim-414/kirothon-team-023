@@ -32,7 +32,7 @@ flowchart LR
         C --> Q[search.py]
         C --> V[preview.py<br/>그리드, JPEG]
         C --> K[calendars.py]
-        SV[server.py<br/>MCP stdio, 도구 9개] --> C
+        SV[server.py<br/>MCP stdio, 도구 10개] --> C
         CLI[cli.py<br/>sync, status, process, install-agent] --> C
     end
     P --> S
@@ -62,7 +62,7 @@ class Source(Protocol):
 | `PhotosSource` | `photos:<uuid>` | Photos의 촬영 시각 (로컬, naive) | `p.screenshot`인 이미지만. 원본이 iCloud에만 있으면 `path_derivatives` 중 존재하는 첫 파일(가장 큰 미리보기) 사용 |
 | `FolderSource` | `folder:<sha1(절대경로)[:16]>` | 파일 mtime | png, jpg, jpeg, heic, webp. 하위 폴더 포함. `ALBUM_MCP_FOLDERS`(`:` 구분) |
 
-`PhotosSource`는 PhotosDB와 이미지 목록을 프로세스당 한 번만 읽어 메모리에 둡니다 (실측 42,147장 7.6초). 대신 오래 켜진 서버는 새 사진을 보지 못합니다 (tasks 21.1).
+`PhotosSource`는 PhotosDB와 이미지 목록을 프로세스당 한 번만 읽어 메모리에 둡니다 (실측 42,147장 7.6초). 오래 켜진 서버도 새 사진을 보도록 5분(`ALBUM_MCP_PHOTOS_REFRESH`)이 지나면 다음 호출 때 다시 읽습니다 (tasks 21.1).
 
 Photos 라이브러리를 열 수 없으면(전체 디스크 접근 권한 없음) `SourceUnavailable`을 던지고, `Album.sync`는 이를 `errors`에 담아 돌려준 뒤 나머지 소스로 계속 진행합니다.
 
@@ -144,7 +144,7 @@ end를 생략하면 시각 일정은 +1시간, 종일 일정은 같은 날로 �
 ### server.py: MCP 서버
 
 - `MCPServer("rollcall", title="Rollcall", instructions=...)`, stdio.
-- 도구: `sync_captures`, `inbox`, `file_capture`, `add_event`, `search`, `look_at`, `get_photo`, `export_photos`, `album_status`.
+- 도구: `sync_captures`, `inbox`, `file_capture`, `add_event`, `search`, `find_photos`, `look_at`, `get_photo`, `export_photos`, `album_status`.
 - `look_at`, `get_photo`는 `[JSON 텍스트, Image]`를 반환해 텍스트 블록과 이미지 블록이 함께 갑니다.
 - `traced` 데코레이터: 요청 id(8자리)를 만들어 모든 로그에 붙이고, 도구 이름과 인자를 INFO로, 예외를 스택과 함께 ERROR로 기록한 뒤 `ErrorType: message`로 다시 던집니다. 로그는 stderr(stdout은 MCP 프로토콜용).
 - 도구는 워커 스레드에서 병렬로 불릴 수 있고 SQLite 연결을 하나 공유하므로 `threading.Lock`으로 직렬화합니다.
@@ -200,7 +200,7 @@ end를 생략하면 시각 일정은 +1시간, 종일 일정은 같은 날로 �
 
 | 범위 | 방법 | 위치 |
 |---|---|---|
-| 단위·통합 | 임시 폴더에 텍스트를 그린 합성 PNG를 만들고 `Album`을 `folder` 소스 + `ics` 백엔드로 실행 | `tests/test_core.py` (8개) |
+| 단위·통합 | 임시 폴더에 텍스트를 그린 합성 PNG를 만들고 `Album`을 `folder` 소스 + `ics` 백엔드로 실행 | `tests/test_core.py` (10개) |
 | 검증 항목 | 증분 동기화와 순서, OCR, kind·summary 검증과 재분류, 검색 순위·kind·기간 필터, .ics 내용(UTC 변환, 장소)과 중복 방지, start > end 거부, 종일 일정, 그리드·내보내기와 없는 id 건너뛰기, 마이그레이션 재실행 | 같은 파일 |
 | MCP 프로토콜 | MCP 클라이언트로 서버를 띄워 도구 목록, 실제 스크린샷 `sync_captures`, 병렬 호출 10개(오류 0), `look_at`의 text+image 블록 확인 | 개발 중 수동 스크립트 |
 | 엔드투엔드 | 합성 밋업 초대장·영수증 2장으로 `album-mcp process` 실행 → Kiro CLI가 event/reference로 분류하고 밋업 일정을 .ics로 생성 | 개발 중 수동 실행, `BUILD_REPORT.md` |

@@ -160,3 +160,26 @@ def test_find_photos_whole_library_and_reuse_ids(album, tmp_path):
     assert meta["indexed"] is False and "Car" in meta["labels"]
     out = album.export_photos(["photos:CAR1", "photos:NOPE"], str(tmp_path / "exp"))
     assert len(out) == 1 and Path(out[0]).name == "a_photos-CAR1.png"
+
+
+def test_photos_cache_refreshes(album, monkeypatch):
+    import album_mcp.sources as src_mod
+    src = album.photos_source()
+    loads = []
+
+    class Lib:
+        def __init__(self, path):
+            loads.append(path)
+
+        def photos(self, **kw):
+            return []
+
+    monkeypatch.setattr("osxphotos.PhotosDB", Lib)
+    clock = [1000.0]
+    monkeypatch.setattr(src_mod.time, "monotonic", lambda: clock[0])
+    src.find(["Car"], None, None, 10)
+    src.find(["Car"], None, None, 10)
+    assert len(loads) == 1  # cached
+    clock[0] += src.REFRESH_SECONDS + 1
+    src.find(["Car"], None, None, 10)
+    assert len(loads) == 2  # reloaded after the refresh interval

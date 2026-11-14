@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -73,19 +74,27 @@ class PhotosSource:
 
     name = "photos"
 
+    # Reload the library at most this often so a long-running server sees new photos.
+    REFRESH_SECONDS = int(os.environ.get("ALBUM_MCP_PHOTOS_REFRESH", "300"))
+
     def __init__(self, library: str | None = None, screenshots_only: bool = True):
         self.library = library
         self.screenshots_only = screenshots_only
         self._db = None
         self._images_cache = None
+        self._loaded_at = 0.0
 
     def _photosdb(self):
+        if self._db is not None and self._loaded_at and time.monotonic() - self._loaded_at > self.REFRESH_SECONDS:
+            self._db = None
+            self._images_cache = None
         if self._db is None:
             import osxphotos
 
             lib = self.library or os.path.expanduser("~/Pictures/Photos Library.photoslibrary")
             try:
                 self._db = osxphotos.PhotosDB(lib)
+                self._loaded_at = time.monotonic()
             except (OSError, FileNotFoundError, PermissionError) as e:
                 raise SourceUnavailable(FDA_HELP) from e
         return self._db
@@ -118,8 +127,9 @@ class PhotosSource:
 
     def _images(self) -> list:
         """All still images, read once per process and kept in memory."""
+        db = self._photosdb()  # may drop a stale cache
         if self._images_cache is None:
-            self._images_cache = self._photosdb().photos(images=True, movies=False)
+            self._images_cache = db.photos(images=True, movies=False)
         return self._images_cache
 
     def items(self, since: datetime | None) -> Iterator[Item]:

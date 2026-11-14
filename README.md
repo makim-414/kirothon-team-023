@@ -169,6 +169,7 @@ uv run album-mcp uninstall-agent        # 끄기
 | `ALBUM_MCP_CALENDAR_NAME` | `Rollcall` | Apple 캘린더 이름 (없으면 생성) |
 | `ALBUM_MCP_GOOGLE_CALENDAR_ID` | `primary` | Google 캘린더 id |
 | `ALBUM_MCP_ICS_DIR` | `~/.album-mcp/events` | .ics 저장 폴더 |
+| `ALBUM_MCP_PHOTOS_REFRESH` | `300` | Photos 보관함을 다시 읽는 간격(초) |
 | `ALBUM_MCP_DB` | `~/.album-mcp/album.db` | 로컬 인덱스 |
 
 ### 안드로이드 캡쳐
@@ -187,10 +188,10 @@ uv run album-mcp uninstall-agent        # 끄기
 ## 7. 테스트
 
 ```bash
-uv run pytest -q     # 8 passed
+uv run pytest -q     # 10 passed
 ```
 
-`tests/test_core.py`는 텍스트를 그린 합성 PNG를 임시 폴더에 만들고, `folder` 소스와 `ics` 캘린더로 실제 OCR까지 실행합니다. 사용자 사진이나 캘린더는 건드리지 않습니다.
+`tests/test_core.py`(10개)는 텍스트를 그린 합성 PNG를 임시 폴더에 만들고, `folder` 소스와 `ics` 캘린더로 실제 OCR까지 실행합니다. 사용자 사진이나 캘린더는 건드리지 않습니다.
 
 | 테스트 | 확인하는 것 |
 |---|---|
@@ -202,10 +203,13 @@ uv run pytest -q     # 8 passed
 | `test_build_event_all_day` | 종일 일정 |
 | `test_look_at_and_export` | 번호 그리드, 없는 id 건너뛰기, 내보내기 덮어쓰기 방지 |
 | `test_db_migration_idempotent` | 스키마 버전, 마이그레이션 재실행 |
+| `test_find_photos_whole_library_and_reuse_ids` | 보관함 전체 라벨·날짜 검색, 최신순, 결과 id로 look_at·get_photo·export |
+| `test_photos_cache_refreshes` | 보관함 캐시를 일정 시간 뒤 다시 읽음 |
 
 테스트 밖에서 직접 확인한 것: MCP 클라이언트로 도구 9개 목록과 병렬 호출 10개(오류 0), 실제 스크린샷 211장 인덱싱, Kiro CLI 헤드리스로 분류와 .ics 일정 생성.
 실제 환경에서 확인한 것: Apple Calendar 일정 생성, launchd 자동 모드(새 캡쳐 → 약 90초 뒤 분류와 일정 등록).
-아직 확인하지 않은 것: Google 캘린더 실제 계정 등록, 전체 디스크 접근 권한을 준 Photos 소스 (`.kiro/specs/album-mcp/tasks.md` 14번).
+실제 Photos 보관함(42,147장)에서 동기화·분류 30건, `find_photos`로 차 파손 사진 찾기.
+아직 확인하지 않은 것: Google 캘린더 실제 계정 등록 (`.kiro/specs/album-mcp/tasks.md` 14번).
 
 ---
 

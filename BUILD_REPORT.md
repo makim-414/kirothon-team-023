@@ -13,8 +13,12 @@ KIROTHON 2026, team-023 파소. 11:00부터 18:00까지 Kiro IDE 한 세션에�
 | SDK 대응 | 셸 + 소스 읽기 | 설치된 mcp 2.3.0에서 FastMCP가 MCPServer로 바뀐 것을 패키지 소스에서 확인하고 새 API로 작성 | `server.py` |
 | 구현 | 에이전트 코딩 | DB(마이그레이션, 백업 복원), 검색(한국어 OCR 띄어쓰기 보정), 캘린더 3종(AppleScript, Google API, RFC 5545 .ics), 썸네일 그리드 | `src/album_mcp/*` |
 | 실제 환경 검증 | launchd + Kiro CLI 헤드리스 | 감시 폴더에 예약 확인 캡쳐를 넣자 약 90초 만에 사람 조작 없이 분류되고 실제 Apple Calendar "Rollcall" 캘린더에 일정 생성. 생성된 일정을 AppleScript로 다시 읽어 필드 확인 | `tasks.md` 14.2, 14.5 |
+| 실제 보관함 연동 | MCP 도구 호출 | 전체 디스크 접근 권한 후 Photos 보관함 42,147장 로딩 7.6초. Kiro가 `sync_captures(limit=20)` → `inbox` → `look_at`(OCR이 불분명한 10장) → `file_capture` 30건 실행 (event 1, insight 9, reference 10, other 10) | `tasks.md` 14.1 |
+| 일정 확인 단계 | 채팅 | 일정 후보(아이언트 대금 11/13 지급)는 등록 전에 사용자에게 먼저 보여 줌. 사용자 확인 전에는 `add_event` 호출하지 않음 | 대화 기록 |
+| 기능 추가 (사용자 요청) | Spec 갱신 + 구현 | "내 차 사고 난 사진"을 못 찾는 문제 → `find_photos` 도구 추가, sync 기본값을 최근 30일·최신순으로 변경. tasks.md 19–21, requirements.md 표시, design.md, steering을 같이 갱신 | `sources.py`, `core.py`, `tasks.md` 19–21 |
+| 실제 검색 검증 | MCP 도구 + 이미지 판독 | "차 사고 난 내 차 사진": `search` 실패 → `find_photos(["Bumper"])` 129장 → `look_at` 그리드를 직접 보고 파손 사진 14장(2024-07-03, 2024-11-08~11 두 건) 선택 | `tasks.md` 20 |
 | 성능 측정 | 셸 실행 | 실제 스크린샷 211장 인덱싱 44초(장당 0.21초), 검색 4–5ms | `tasks.md` 14.4 |
-| 테스트 | 셸 실행 | 합성 이미지로 동기화, OCR, 검증, 검색 순위, .ics 생성, 중복 방지, 마이그레이션 테스트 | `tests/test_core.py` (8 passed) |
+| 테스트 | 셸 실행 | 합성 이미지로 동기화, OCR, 검증, 검색 순위, .ics 생성, 중복 방지, 마이그레이션, 가짜 Photos 보관함으로 find_photos·캐시 갱신 테스트 | `tests/test_core.py` (10 passed) |
 | MCP 연동 | MCP 설정 | 워크스페이스 `mcp.json`에 `rollcall` 서버 등록, MCP 클라이언트로 도구 9개 목록과 실제 스크린샷 동기화 확인 | `.kiro/settings/mcp.json` |
 | AI 사용 규칙 | Steering | 분류 기준표, 3가지 워크플로(분류, 캘린더, 찾기), 상대 날짜는 캡쳐 시각 기준으로 해석, 검색어 한·영 확장 규칙 | `.kiro/steering/rollcall.md` |
 | 자동화 | Hook | 세션 시작 시 새 캡쳐를 OCR 인덱싱하고, 미분류가 있으면 에이전트에게 알림 | `.kiro/hooks/rollcall-sync-on-start.json` |
@@ -66,6 +70,8 @@ Spec은 requirements-first로 시작했지만 design → tasks 순서를 지키�
 | ChromaDB 같은 벡터 DB | SQLite + 필드 가중치 검색 + AI 질의 확장 | 분류할 때 AI가 한·영 태그를 붙이므로 키워드 검색으로 충분 |
 | macOS Photos 전용 | Photos + 이미지 폴더 소스 | Photos는 전체 디스크 접근 권한이 필요하고, 안드로이드 사용자도 지원하려고 |
 | Google Calendar 전용 | Apple / Google / .ics 중 선택 | 사용자마다 쓰는 캘린더가 다름 |
+| 스크린샷만 다루기 | 스크린샷은 색인·분류, 일반 사진은 `find_photos`로 색인 없이 찾기 | "내 차 사고 난 사진"처럼 캡쳐가 아닌 사진도 찾아야 함. 4만 장을 모두 OCR하는 것은 시간 낭비 |
+| 동기화는 마지막 시점 이후, 오래된 순 | 최근 30일, 최신순 | 처음 연결한 사용자는 최근 캡쳐부터 정리되길 원함 |
 | 30분 주기 Kiro hook | SessionStart hook + launchd(폴더 감시) + Kiro CLI 헤드리스 | Kiro hook에는 시간 주기 트리거가 없음. launchd는 캡쳐가 생기는 순간 실행 가능 |
 | 캘린더 이름 "앨범 MCP" | "Rollcall" | 서비스 이름을 Rollcall로 정함 |
 
@@ -79,5 +85,9 @@ Spec은 requirements-first로 시작했지만 design → tasks 순서를 지키�
 | 한국어 OCR이 "이 런 것"처럼 음절을 띄움 | 검색할 때 공백을 지우고 비교 |
 | 헤드리스 Kiro CLI가 `--trust-tools=@rollcall`로 도구를 승인하지 않음 | `@rollcall/sync_captures`처럼 도구별로 나열 (`--trust-all-tools`는 쓰지 않음) |
 | 헤드리스 실행에서 병렬 도구 호출 2건 실패 (Kiro가 재시도해 결과는 정상) | 원인을 스레드 간 공유 SQLite 연결로 보고 도구 호출을 락으로 직렬화. 이후 병렬 10개 호출에서 오류 0 (원래 실패 메시지는 남지 않아 원인은 추정) |
+| 첫 Photos sync가 2017년 캡쳐부터 시작함 (watermark가 없으면 가장 오래된 것부터) | 기본값을 "최근 30일, 최신순"으로 바꾸고 이미 색인한 것은 건너뛰게 함 |
+| 스크린샷만 색인해서 일반 사진(차 사고 사진)을 못 찾음 | 색인 없이 보관함 전체를 Apple 라벨·날짜로 거르는 `find_photos` 추가. Apple에는 "사고" 라벨이 없어 Bumper 같은 물체 라벨로 후보를 뽑고 파손 여부는 AI가 그리드를 보고 판단 |
+| `look_at`이 없는 파일을 건너뛰어 그리드 번호가 입력 순서와 어긋남. 검증 중 다른 사진을 고를 뻔함 | 함께 오는 번호↔id 범례로 읽도록 steering에 명시 |
+| 보관함을 메모리에 한 번만 읽으면 오래 켜진 서버가 새 사진을 못 봄 | 5분마다 다시 읽기 (`ALBUM_MCP_PHOTOS_REFRESH`) |
 | 2×2px 이미지에서 Vision이 오류를 냄 | 설계대로 빈 OCR로 저장하고 다음 캡쳐 진행 (211장 중 1장) |
-| 아직 못 푼 것 | Google 캘린더 실제 계정 등록, 권한을 준 Photos 소스, 5만 장 규모 성능은 미검증 (`tasks.md` 14번) |
+| 아직 못 푼 것 | Google 캘린더 실제 계정 등록은 미검증 (`tasks.md` 14.3) |
