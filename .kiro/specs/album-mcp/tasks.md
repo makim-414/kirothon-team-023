@@ -79,7 +79,7 @@
   - _Requirements: 15.2, 15.4, 18.4_
 
 - [ ] 14. 실제 환경 검증
-  - [x] 14.1 전체 디스크 접근 권한을 준 뒤 Photos 소스로 실제 동기화: 보관함 42,147장(스크린샷 21,464장) 로딩 7.6초, MCP `sync_captures(limit=20)`로 최근 캡쳐 20장 색인, inbox 30장 분류(event 1, insight 9, reference 10, other 10). 최근 30일 중 72장은 아직 미색인
+  - [x] 14.1 전체 디스크 접근 권한을 준 뒤 Photos 소스로 실제 동기화: 보관함 42,147장(스크린샷 21,464장) 로딩 7.6초, MCP `sync_captures(limit=20)`로 최근 캡쳐 20장 색인, inbox 30장 분류(event 1, insight 9, reference 10, other 10). 이어서 최근 30일 나머지 72장도 색인·분류(누적 102장: event 8, insight 30, reference 32, other 32). 일정은 사용자 확인 후 1건 등록(아이언트 대금 11/13 종일), 나머지 일정 후보 7건은 확인 대기
     - _Requirements: 1.1, 1.3, 1.5, 4.1_
   - [x] 14.2 `apple` 백엔드로 실제 일정 등록: "Rollcall" 캘린더 자동 생성, Calendar에서 다시 읽어 제목·시각(19:00–21:00)·장소·메모(capture id, 경로) 확인
     - _Requirements: 6.8, 6.9, 19.1_
