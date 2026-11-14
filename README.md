@@ -1,120 +1,160 @@
 # Rollcall
 
-Your camera roll, on call. 캡처만 해 두면 알아서 정리하고, 일정에 넣고, 말 한마디로 그 사진을 다시 꺼내 주는 "일하는 앨범 MCP"입니다. 사진과 캡처를 매일 쌓아 두지만 필요할 때 못 찾는 사람의 불편을 해결합니다.
+일하는 앨범 MCP (the album MCP that works for you)
 
-**Demo:** (데모 영상 링크, 제출 전 기입)
+Demo: _(녹화 데모 링크 추가 예정)_
 
----
+캡쳐만 하세요. Rollcall이 스크린샷을 읽고 분류해서, 날짜가 있으면 캘린더에 넣고, 나중에 "그때 캡쳐한 그거"라고 물으면 찾아 줍니다.
 
-## 1. 문제 정의
+## 문제 정의
 
-### 대상 사용자
-캡처와 사진을 매일 찍어 두는 스마트폰·맥 사용자. 특히 일정 안내(카톡 대화, 대회 페이지), 나중에 볼 정보, 작업에 쓸 레퍼런스를 "일단 캡처"로 모아 두는 사람.
+우리는 하루에도 여러 번 "나중에 봐야지" 하며 화면을 캡쳐합니다. 밋업 초대, 예약 확인, 영수증, 와이파이 비번, 좋은 글귀. 그런데 캡쳐는 앨범에 쌓이기만 합니다.
 
-### 문제 상황
-- 친구에게 차 사고 이야기를 하다가(상황) 그 사진을 보여 주려고 앨범을 뒤졌지만, 몇 분을 넘겨도 못 찾아 포기했다(불편). 사진 앱에서 "테슬라"를 검색해도 부서진 내 차 사진은 나오지 않았다.
-- 대회 일정이나 약속을 캡처만 해 두면(상황) 캘린더에 옮기는 것을 잊어 마감을 놓친다(불편).
-- 인사이트로 저장한 캡처는 쌓이기만 하고(상황) 다시 꺼내 쓰는 일이 거의 없다(불편).
+- **다시 못 찾는다.** 앨범 검색은 날짜와 "스크린샷" 정도만 압니다. "지난달 캡쳐한 카페 영수증"은 수백 장을 스크롤해야 나옵니다.
+- **일정이 캘린더로 안 간다.** 초대장을 캡쳐해 놓고 캘린더 등록은 잊어서 일정을 놓칩니다.
+- **정리할 시간이 없다.** 앨범 정리는 아무도 하지 않습니다.
 
-### 기존 방식과 한계
-- 사진 앱 검색: "Car" 같은 큰 분류만 알아듣는다. "부서진 내 차"처럼 의미로는 찾지 못해, 결국 수백 장을 손으로 넘겨야 한다.
-- 캡처 속 일정: 사람이 직접 읽고 캘린더 앱에 다시 입력해야 한다.
-- 기존 사진 MCP: 보관함 조회와 내보내기 중심이고, 캡처를 분류해 쌓거나 일정으로 옮겨 주지 않는다.
+캡쳐는 "기억해 줘"라는 의도인데, 지금의 앨범은 그 의도를 처리하지 않습니다.
 
-### 근거
-만든 사람의 맥 사진 보관함을 직접 측정했다(2026-11-14).
-- 전체 사진 44,546장, 그중 스크린샷 21,464장
-- "차" 라벨이 붙은 사진 1,194장. 이 안에서 사고 사진 한 장을 찾으려면 손으로 넘겨야 한다.
-- 최근 스크린샷 300장 모두 원본은 아이클라우드에만 있고, 맥에는 미리보기만 있다.
+## 핵심 기능
 
-### 목표
-캡처는 하던 대로 하되, 그 뒤의 정리·일정 등록·다시 찾기를 AI 비서(Kiro, Claude)가 대신 하게 한다.
+| 기능 | 설명 |
+|---|---|
+| 자동 수집 | macOS Photos 스크린샷 + 일반 폴더(안드로이드 동기화 폴더 포함)에서 새 캡쳐를 찾습니다 |
+| 온디바이스 OCR | Apple Vision으로 한국어/영어 텍스트를 Mac 안에서 추출합니다 (장당 약 0.5초) |
+| AI 분류 | Kiro가 각 캡쳐를 event / insight / reference / other로 나누고 한국어 요약과 한·영 태그를 붙입니다 |
+| 캘린더 자동 등록 | 날짜가 있는 캡쳐는 Apple Calendar, Google Calendar, 또는 .ics(Outlook, 네이버 등)로 들어갑니다. 같은 캡쳐는 두 번 등록하지 않습니다 |
+| 의미 검색 | 질문을 한·영 동의어로 넓혀 요약, 태그, OCR, Apple 라벨을 함께 검색합니다 |
+| 눈으로 고르기 | 후보를 번호 붙은 썸네일 그리드로 보여 주고, AI가 직접 보고 골라 원본을 꺼내 줍니다 |
+| 완전 자동 모드 | launchd가 스크린샷 폴더를 지켜보다가 새 캡쳐가 생기면 Kiro CLI로 분류와 등록까지 끝냅니다 |
 
----
+MCP 도구: `sync_captures`, `inbox`, `file_capture`, `add_event`, `search`, `look_at`, `get_photo`, `export_photos`, `album_status`
 
-## 2. 핵심 기능
+## 사용 시나리오
 
-| 기능 | 해결하는 불편 | 코드 위치 |
-|---|---|---|
-| 새 캡처 수집과 글자 인식 (`sync_captures`) | 캡처가 쌓이기만 하고 내용으로 찾을 수 없음 | `src/album_mcp/sources.py`, `src/album_mcp/ocr.py` |
-| 미분류 목록과 분류 저장 (`inbox`, `file_capture`) | 일정·인사이트·레퍼런스가 뒤섞여 있음 | `src/album_mcp/core.py`, `src/album_mcp/db.py` |
-| 캡처에서 일정 등록 (`add_event`) | 캡처한 일정을 캘린더에 옮기는 것을 잊음 | `src/album_mcp/calendars.py` |
-| 의미로 찾기 2단계 (`search`, `look_at`) | 큰 분류 라벨로는 원하는 사진이 안 나옴 | `src/album_mcp/search.py`, `src/album_mcp/preview.py` |
-| 사진 보여 주기와 내보내기 (`get_photo`, `export_photos`) | 찾은 사진을 대화나 작업 폴더로 가져오기 번거로움 | `src/album_mcp/server.py` |
-| 세션 시작 시 자동 정리 (Kiro hook) | 정리를 사람이 기억해서 시켜야 함 | `.kiro/hooks/rollcall-sync-on-start.json` |
-| AI가 도구를 쓰는 규칙 (steering) | AI마다 분류 기준이 달라짐 | `.kiro/steering/rollcall.md` |
+1. **밋업 초대장 캡쳐 → 캘린더**
+   카톡으로 받은 밋업 공지를 캡쳐합니다. 몇 초 뒤 Rollcall이 "AWSKRUG 11월 정기 밋업, 11/27(금) 19:00–21:00, AWS Korea 18층"을 "Rollcall" 캘린더에 넣습니다. 캡쳐 id가 일정 메모에 남아 원본으로 바로 돌아갈 수 있습니다.
+2. **"지난달 캡쳐한 카페 영수증 찾아줘"**
+   Kiro가 `영수증 receipt 카페 cafe 결제 스타벅스`로 검색하고, 후보 썸네일을 본 뒤 맞는 영수증을 보여 줍니다.
+3. **"전에 캡쳐한 와이파이 비번"**
+   OCR 텍스트에 SSID와 비밀번호가 있어 바로 찾습니다.
+4. **"디자인 레퍼런스 모아서 바탕화면 refs 폴더에"**
+   insight로 분류된 캡쳐 중 디자인 관련을 골라 폴더로 내보냅니다.
 
-찾기는 2단계로 한다. 먼저 글자, 요약, 태그, 라벨, 날짜로 후보를 줄이고, 다음으로 후보 미리보기를 번호 붙은 한 장짜리 모음 이미지로 AI에게 보여 줘 AI가 눈으로 고른다.
+## 기대 효과
 
-## 3. 사용 시나리오
+- 캡쳐 한 번으로 일정 등록까지 끝나 "캡쳐해 놓고 잊은 일정"이 사라집니다.
+- 앨범을 스크롤하는 대신 말로 물어서 몇 초 만에 찾습니다.
+- 정리를 따로 하지 않아도 모든 캡쳐에 요약과 태그가 붙습니다.
 
-1. 평소처럼 캡처한다. 대회 안내 페이지, 카톡 약속, 나중에 볼 글.
-2. Kiro(또는 Claude)를 열면 hook이 새 캡처를 수집해 글자를 읽어 둔다.
-3. AI가 각 캡처를 일정, 인사이트, 레퍼런스, 기타로 분류하고 한 줄 요약과 태그를 남긴다.
-4. 날짜가 있는 캡처는 제목과 시간을 보여 준 뒤, 확인을 받으면 캘린더에 넣는다.
-5. 나중에 "지난주 캡처한 대회 마감 언제였지", "내 차 사고 난 사진 가져와 봐"라고 말하면 찾아서 답하거나 사진을 보여 준다.
+## 차별점
 
-## 4. 기대 효과
+- **프라이버시:** 사진 원본과 OCR, 인덱스는 Mac 안의 SQLite에만 저장됩니다. 외부 비전 API나 클라우드 벡터 DB를 쓰지 않습니다. Photos 라이브러리는 읽기 전용으로 엽니다(osxphotos가 DB 사본을 읽음).
+- **AI가 직접 본다:** 임베딩 점수에만 기대지 않고, 후보 썸네일 그리드를 AI가 보고 고릅니다. OCR이 없는 사진도 찾을 수 있습니다.
+- **어디서든 쓴다:** MCP 서버라서 Kiro, Claude Desktop 등 MCP를 지원하는 어떤 어시스턴트에도 붙습니다. 안드로이드 캡쳐와 Google/Outlook 캘린더 사용자도 지원합니다.
+- **캡쳐만 하면 끝:** launchd 감시 + Kiro CLI 헤드리스 실행으로 사용자가 아무것도 열지 않아도 처리됩니다.
 
-- 사진 한 장 찾기: 수 분을 쓰고 포기 → 말 한마디, 1분 이내 (목표)
-- 캡처한 일정을 캘린더로 옮기기: 건당 손 입력 약 1분 → 확인 한 번
-- 글자 인식 속도: 캡처 한 장당 약 0.1~0.3초 (이 맥에서 측정). 서버 밖으로 사진을 보내지 않는다.
+## 구조
 
-## 5. 차별점
-
-- 서버 안에 AI 모델이 없다. 판단은 연결한 AI(Kiro, Claude)가 하고, Rollcall은 읽기·저장·등록만 맡는다. API 키가 필요 없다.
-- 사진을 미리 전부 분석하지 않는다. 후보를 줄인 뒤 AI가 미리보기를 직접 보고 고르므로, 색인 없이도 "부서진 내 차" 같은 의미 검색이 된다.
-- 찾기만 하는 도구가 아니라, 캡처를 일정과 지식으로 옮겨 주는 흐름까지 포함한다.
-- 사진 보관함은 읽기 전용이다. 분류 결과는 별도 로컬 DB에만 저장한다.
-
----
-
-## 6. 설치와 실행
-
-macOS와 [uv](https://docs.astral.sh/uv/)가 필요하다.
-
-```bash
-# 1. 의존성 설치
-git clone https://github.com/makim-414/kirothon-team-023.git
-cd kirothon-team-023
-uv sync
-
-# 2. 실행 (MCP 서버, stdio)
-uv run album-mcp
-
-# 서버 없이 바로 써 보기
-uv run album-mcp sync --limit 20   # 새 캡처 수집과 글자 인식
-uv run album-mcp status            # 쌓인 현황
+```
+캡쳐 (Photos / 스크린샷 폴더 / 안드로이드 동기화 폴더)
+   │  sync_captures: 새 파일 탐지 → Apple Vision OCR → SQLite
+   ▼
+Kiro (steering: .kiro/steering/rollcall.md)
+   │  inbox → look_at → file_capture   (분류, 요약, 태그)
+   │  add_event                        (Apple / Google / .ics)
+   │  search → look_at → get_photo     (찾기)
+   ▼
+~/.album-mcp/album.db   (로컬 전용)
 ```
 
-Kiro에 연결하려면 `.kiro/settings/mcp.json`에 아래를 넣는다. Claude도 같은 내용으로 연결된다.
+| 파일 | 역할 |
+|---|---|
+| `src/album_mcp/server.py` | MCP 서버 (stdio), 도구 정의, 요청 id 로깅 |
+| `src/album_mcp/core.py` | 설정, 동기화, 분류, 검색, 이벤트 로직 |
+| `src/album_mcp/sources.py` | Photos(osxphotos) / 폴더 소스 |
+| `src/album_mcp/ocr.py` | Apple Vision OCR (ko/en) |
+| `src/album_mcp/calendars.py` | Apple(AppleScript) / Google API / .ics 백엔드 |
+| `src/album_mcp/search.py` | 필드 가중치 검색 (한국어 OCR 띄어쓰기 보정) |
+| `src/album_mcp/preview.py` | 번호 썸네일 그리드, JPEG 변환 |
+| `src/album_mcp/cli.py` | `sync`, `status`, `process`, `install-agent` 명령 |
+
+## 설치와 실행
+
+요구 사항: macOS 13+, [uv](https://docs.astral.sh/uv/), Kiro (IDE 또는 CLI)
+
+```bash
+git clone https://github.com/makim-414/team-023.git
+cd team-023
+uv sync
+uv run pytest -q          # 8 passed
+```
+
+### 1. Kiro에 연결
+
+이 레포를 Kiro로 열면 `.kiro/settings/mcp.json`의 `rollcall` 서버가 자동으로 뜹니다. 다른 위치에 클론했다면 `--directory` 경로를 고쳐 주세요.
 
 ```json
-{
-  "mcpServers": {
-    "rollcall": {
-      "command": "uv",
-      "args": ["run", "--directory", "/레포를/받은/경로", "album-mcp"]
-    }
-  }
+"rollcall": {
+  "command": "uv",
+  "args": ["run", "--directory", "/path/to/team-023", "album-mcp"],
+  "env": { "ALBUM_MCP_FOLDERS": "~/Pictures/Screenshots", "ALBUM_MCP_CALENDAR": "apple" }
 }
 ```
 
-사진 앱 보관함을 읽으려면 시스템 설정의 개인정보 보호 및 보안에서 Kiro(또는 터미널)에 전체 디스크 접근 권한을 켠다. 캘린더에 처음 추가할 때는 캘린더 접근 허용 창이 뜬다.
+Claude Desktop은 `~/Library/Application Support/Claude/claude_desktop_config.json`의 `mcpServers`에 같은 내용을 넣으면 됩니다.
 
-## 7. 테스트
+Kiro 채팅에서 "캡쳐 정리해줘", "지난주 캡쳐한 영수증 찾아줘"처럼 말하면 됩니다.
+
+### 2. macOS 권한
+
+| 권한 | 필요한 곳 | 설정 위치 |
+|---|---|---|
+| 전체 디스크 접근 | Photos 라이브러리 읽기 | 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 권한 → Kiro(또는 터미널) |
+| 자동화 → 캘린더 | Apple Calendar 등록 | 첫 등록 때 뜨는 팝업에서 허용 |
+
+전체 디스크 접근 없이도 폴더 소스는 동작합니다.
+
+### 3. 완전 자동 모드 (캡쳐만 하면 끝)
 
 ```bash
-uv run pytest
+uv run album-mcp install-agent          # 스크린샷 폴더 감시 + 30분마다 실행
+tail -f ~/.album-mcp/agent.log
+uv run album-mcp uninstall-agent        # 끄기
 ```
 
----
+새 캡쳐가 생기면 `album-mcp process`가 OCR 후 `kiro-cli chat --no-interactive`로 분류와 캘린더 등록을 끝냅니다.
+
+### 설정 (환경 변수)
+
+| 변수 | 기본값 | 설명 |
+|---|---|---|
+| `ALBUM_MCP_SOURCES` | `photos` (폴더 지정 시 `photos,folder`) | 사용할 소스 |
+| `ALBUM_MCP_FOLDERS` | – | 이미지 폴더, `:`로 구분 |
+| `ALBUM_MCP_PHOTOS_LIBRARY` | `~/Pictures/Photos Library.photoslibrary` | Photos 라이브러리 경로 |
+| `ALBUM_MCP_CALENDAR` | `apple` | `apple` / `google` / `ics` |
+| `ALBUM_MCP_CALENDAR_NAME` | `Rollcall` | Apple 캘린더 이름 (없으면 생성) |
+| `ALBUM_MCP_GOOGLE_CALENDAR_ID` | `primary` | Google 캘린더 id |
+| `ALBUM_MCP_ICS_DIR` | `~/.album-mcp/events` | .ics 저장 폴더 |
+| `ALBUM_MCP_DB` | `~/.album-mcp/album.db` | 로컬 인덱스 |
+
+### 안드로이드 캡쳐
+
+폰의 `Pictures/Screenshots`를 Mac 폴더로 동기화하고 그 경로를 `ALBUM_MCP_FOLDERS`에 추가합니다.
+
+- Google Drive for desktop: 폰에서 Drive 백업 → Mac의 `~/Google Drive/...` 폴더 지정
+- USB/adb: `adb pull /sdcard/Pictures/Screenshots ~/Pictures/Android`
+
+### 캘린더 선택
+
+- **Apple Calendar (기본):** 별도 설정 없음. macOS 캘린더에 Google 계정을 추가해 두었다면 `ALBUM_MCP_CALENDAR_NAME`에 그 Google 캘린더 이름을 넣어 바로 Google에 등록할 수도 있습니다.
+- **Google Calendar API:** `uv sync --extra google` → Google Cloud Console에서 데스크톱 OAuth 클라이언트를 만들어 `~/.config/album-mcp/google_client.json`에 저장 → `uv run album-mcp google-login` → `ALBUM_MCP_CALENDAR=google`. 토큰은 레포 밖에 0600 권한으로 저장됩니다.
+- **그 외 (Outlook, 네이버 등):** `ALBUM_MCP_CALENDAR=ics`. 표준 .ics 파일을 만들어 기본 캘린더 앱으로 엽니다.
+
+## Kiro 활용
+
+spec(`.kiro/specs/album-mcp`), steering(`.kiro/steering/rollcall.md`), hook(`.kiro/hooks/`), MCP 설정을 모두 커밋했습니다. 자세한 내용은 [BUILD_REPORT.md](BUILD_REPORT.md)를 보세요.
 
 ## 팀
 
-- **팀 번호:** team-023
-- **팀명:** 파소
-
-| 이름 | 역할 |
-|---|---|
-| 김민성 | 기획, 개발 |
+team-023 파소

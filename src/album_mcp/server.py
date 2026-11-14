@@ -6,6 +6,7 @@ import functools
 import json
 import logging
 import sys
+import threading
 import uuid
 
 from mcp.server.mcpserver import Image, MCPServer
@@ -44,6 +45,9 @@ Workflows:
 
 mcp = MCPServer("rollcall", title="Rollcall", instructions=INSTRUCTIONS)
 _album: Album | None = None
+# Tools run in worker threads and may be called in parallel; one SQLite
+# connection is shared, so serialize calls.
+_lock = threading.Lock()
 
 
 def album() -> Album:
@@ -56,6 +60,14 @@ def album() -> Album:
 def traced(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
+        with _lock:
+            return _call(fn, args, kwargs)
+
+    return wrapper
+
+
+def _call(fn, args, kwargs):
+    if True:
         _rid["v"] = uuid.uuid4().hex[:8]
         log.info("call %s %s", fn.__name__, json.dumps(kwargs, ensure_ascii=False, default=str)[:500])
         try:
@@ -65,8 +77,6 @@ def traced(fn):
             raise RuntimeError(f"{type(e).__name__}: {e}") from e
         finally:
             _rid["v"] = "-"
-
-    return wrapper
 
 
 @mcp.tool()

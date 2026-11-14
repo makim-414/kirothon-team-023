@@ -25,6 +25,8 @@ LABEL = "dev.rollcall.album-mcp"
 PLIST = Path(f"~/Library/LaunchAgents/{LABEL}.plist").expanduser()
 LOG = Path("~/.album-mcp/agent.log").expanduser()
 
+TOOLS = ["sync_captures", "inbox", "file_capture", "add_event", "search", "look_at", "get_photo", "album_status"]
+
 PROCESS_PROMPT = """\
 Use only the rollcall MCP tools. Follow the Rollcall accumulation and event workflows:
 1. Call sync_captures; repeat while remaining > 0 (max 5 times).
@@ -52,7 +54,8 @@ def cmd_process(args) -> int:
     if r["unfiled_total"] == 0:
         return 0
     kiro = shutil.which("kiro-cli") or str(Path("~/.local/bin/kiro-cli").expanduser())
-    cmd = [kiro, "chat", "--no-interactive", "--trust-workspace", "--trust-tools=@rollcall", PROCESS_PROMPT]
+    trust = ",".join(f"@rollcall/{t}" for t in TOOLS)
+    cmd = [kiro, "chat", "--no-interactive", "--trust-workspace", f"--trust-tools={trust}", PROCESS_PROMPT]
     return subprocess.run(cmd, cwd=PROJECT).returncode
 
 
