@@ -46,6 +46,24 @@ For each capture filed as `event`:
 3. `look_at` the top 8–12 ids, pick the right one(s) visually.
 4. `get_photo(id)` to show it, or `export_photos(ids, folder)` if they want files.
 
+## When a tool fails
+
+| tool | error | do |
+|---|---|---|
+| sync_captures | `errors` has a `photos` entry (Full Disk Access) | continue with the other sources; tell the user once how to grant access |
+| sync_captures | any other failure | retry once, then abort and report |
+| inbox | any | abort and report |
+| look_at | "none of the ids exist" | skip; classify from OCR text |
+| file_capture | invalid kind or summary too long | fix the argument and retry once |
+| file_capture | unknown id | skip that capture |
+| add_event | invalid date / start after end | re-read the capture (`get_photo`), fix, retry once; else file as `reference` and skip |
+| add_event | calendar permission / Google setup | abort events for this run; tell the user the setting named in the error |
+| add_event | `already_added` | not an error; skip |
+| search | empty result | retry once with broader terms; then tell the user nothing matched |
+| get_photo / export_photos | unknown id or unreadable file | skip that id and say which ones were skipped |
+
+Never retry a call more than once with the same arguments. A capture that failed to file stays in `inbox` for the next run.
+
 ## Examples
 
 - "어제 찍은 캡쳐 정리해줘" → workflow 1, then 2 for events.

@@ -106,6 +106,8 @@ def test_look_at_and_export(album, tmp_path):
     assert data[:2] == b"\xff\xd8" and [x["n"] for x in legend] == [1, 2, 3]
     out = album.export_photos(ids[:2] + ["nope"], str(tmp_path / "exp"))
     assert len(out) == 2 and all(Path(p).exists() for p in out)
+    again = album.export_photos(ids[:1], str(tmp_path / "exp"))
+    assert again[0] != out[0] and again[0].endswith("_1.png") and Path(out[0]).exists()
 
 
 def test_db_migration_idempotent(tmp_path):

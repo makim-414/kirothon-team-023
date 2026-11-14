@@ -202,7 +202,12 @@ class Album:
             if not c or not Path(c.path).exists():
                 continue
             stem, ext = Path(c.filename).stem, Path(c.path).suffix
-            target = dest / f"{stem}_{c.id.replace(':', '-')}{ext}"
+            base = f"{stem}_{c.id.replace(':', '-')}"
+            target = dest / f"{base}{ext}"
+            n = 1
+            while target.exists():  # never overwrite (Req 10.7)
+                target = dest / f"{base}_{n}{ext}"
+                n += 1
             shutil.copy2(c.path, target)
             out.append(str(target))
         return out

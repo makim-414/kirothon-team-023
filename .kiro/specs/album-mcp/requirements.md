@@ -178,7 +178,7 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 4. WHEN the folder does not exist, THE Album_MCP_Server SHALL create the folder including missing parent folders
 5. IF the folder cannot be created or written because of a permission failure, THEN THE Album_MCP_Server SHALL return an error indicating the permission failure
 6. THE Album_MCP_Server SHALL name each exported file `{original_name}_{capture_id}.{ext}` — **[구현 변경]** id의 `:`는 파일명에 쓸 수 있게 `-`로 바꿈 (`name_folder-ab12.png`)
-7. IF a file with the target name already exists, THEN THE Album_MCP_Server SHALL append a numeric suffix to the new file name and SHALL NOT overwrite the existing file — **[이번 범위 제외]** 같은 이름이 있으면 덮어씀. 숫자 접미사는 미구현 (tasks.md에 남김)
+7. IF a file with the target name already exists, THEN THE Album_MCP_Server SHALL append a numeric suffix to the new file name and SHALL NOT overwrite the existing file — **[구현 변경]** 숫자 접미사는 `_1`, `_2` 형식 (tasks 17.1에서 구현)
 8. WHEN an id does not match a Capture, THE Album_MCP_Server SHALL skip that id and list the id as skipped
 9. WHEN the original file of a Capture exists only in iCloud, THE Album_MCP_Server SHALL export the Local_Preview and mark the exported entry as a preview in the result — **[이번 범위 제외]** Local_Preview 내보내기 표시 없음
 10. THE Album_MCP_Server SHALL export by copying files and SHALL NOT modify the Photos_Library
@@ -244,7 +244,7 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 #### Acceptance Criteria
 
 1. THE Steering_Document SHALL describe the accumulation, event, and retrieval workflows, each with purpose, inputs, outputs, tool call order, and data flow
-2. THE Steering_Document SHALL specify failure handling for each tool as retry, skip, or abort — **[이번 범위 제외]** 도구별 실패 처리(retry/skip/abort) 규칙은 steering에 아직 없음 (tasks.md에 남김)
+2. THE Steering_Document SHALL specify failure handling for each tool as retry, skip, or abort
 3. THE Steering_Document SHALL include at least one example query for each workflow
 4. THE Steering_Document SHALL state the two-step retrieval rule: use search to narrow candidates, then use look_at to confirm visually before calling get_photo or answering
 5. THE Steering_Document SHALL state that the AI_Assistant decides the kind, summary, tags, and events of each Capture

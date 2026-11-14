@@ -12,6 +12,7 @@ KIROTHON 2026, team-023 파소. 11:00부터 18:00까지 Kiro IDE 한 세션에�
 | 기술 검증 | 셸 실행 | osxphotos로 Photos 접근 시도 → 전체 디스크 접근 권한 문제 발견, 폴더 소스를 대안으로 설계. ocrmac이 한국어를 지원하지 않는 것을 확인하고 pyobjc로 Vision을 직접 호출(실측 장당 0.03–1.3초) | `ocr.py`, `sources.py` |
 | SDK 대응 | 셸 + 소스 읽기 | 설치된 mcp 2.3.0에서 FastMCP가 MCPServer로 바뀐 것을 패키지 소스에서 확인하고 새 API로 작성 | `server.py` |
 | 구현 | 에이전트 코딩 | DB(마이그레이션, 백업 복원), 검색(한국어 OCR 띄어쓰기 보정), 캘린더 3종(AppleScript, Google API, RFC 5545 .ics), 썸네일 그리드 | `src/album_mcp/*` |
+| 성능 측정 | 셸 실행 | 실제 스크린샷 211장 인덱싱 44초(장당 0.21초), 검색 4–5ms | `tasks.md` 14.4 |
 | 테스트 | 셸 실행 | 합성 이미지로 동기화, OCR, 검증, 검색 순위, .ics 생성, 중복 방지, 마이그레이션 테스트 | `tests/test_core.py` (8 passed) |
 | MCP 연동 | MCP 설정 | 워크스페이스 `mcp.json`에 `rollcall` 서버 등록, MCP 클라이언트로 도구 9개 목록과 실제 스크린샷 동기화 확인 | `.kiro/settings/mcp.json` |
 | AI 사용 규칙 | Steering | 분류 기준표, 3가지 워크플로(분류, 캘린더, 찾기), 상대 날짜는 캡쳐 시각 기준으로 해석, 검색어 한·영 확장 규칙 | `.kiro/steering/rollcall.md` |
@@ -19,7 +20,7 @@ KIROTHON 2026, team-023 파소. 11:00부터 18:00까지 Kiro IDE 한 세션에�
 | 완전 자동 | Kiro CLI 헤드리스 | launchd가 스크린샷 폴더를 감시 → `kiro-cli chat --no-interactive --trust-tools=@rollcall/...`로 분류와 등록. 처음엔 `@rollcall` 패턴이 승인되지 않아 도구별로 명시해 해결 | `cli.py` (`process`, `install-agent`) |
 | 설계 정리 | Spec (design) | 구현을 마친 뒤 실제 코드 구조(sources, ocr, db, search, preview, calendars, server, cli)를 기준으로 설계 문서 작성 | `.kiro/specs/album-mcp/design.md` |
 | 할 일 정리 | Spec (tasks) | 커밋 기록을 기준으로 끝난 작업 13개는 완료로, 실제 환경 검증·데모·README 마무리·제출은 미완료로 정리 | `.kiro/specs/album-mcp/tasks.md` |
-| 요구사항 대조 | Spec (requirements) | 구현과 기준을 하나씩 대조해 구현하지 않은 기준 16개에 **[이번 범위 제외]**, 다르게 구현한 기준 24개에 **[구현 변경]** 표시 | `.kiro/specs/album-mcp/requirements.md` |
+| 요구사항 대조 | Spec (requirements) | 구현과 기준을 하나씩 대조해 구현하지 않은 기준에 **[이번 범위 제외]**, 다르게 구현한 기준에 **[구현 변경]** 표시 | `.kiro/specs/album-mcp/requirements.md` |
 | 문서 | 에이전트 작성 | README, 이 보고서, 발표자료 | `README.md`, `BUILD_REPORT.md`, `PRESENTATION.pdf` |
 
 ## 설계 결정
@@ -27,7 +28,7 @@ KIROTHON 2026, team-023 파소. 11:00부터 18:00까지 Kiro IDE 한 세션에�
 | 결정 | 고른 것 | 대안 | 이유 |
 |---|---|---|---|
 | 의미 이해 | MCP를 쓰는 AI(Kiro)가 직접 분류·요약·태그 | Twelve Labs, 외부 비전 API, 임베딩 | Twelve Labs는 영상용. 외부 API는 사진이 Mac 밖으로 나가고 키 관리가 필요. 이미 대화 중인 AI가 OCR과 썸네일을 보는 편이 단순하고 정확 |
-| 검색 | 필드 가중치 키워드 + AI의 질의 확장 + 썸네일로 최종 선택 | 벡터 DB (Chroma, Pinecone) | 분류 시 AI가 한·영 태그를 붙이므로 키워드로 충분. 의존성과 모델 다운로드 없음. 응답 시간은 아직 실측 전(tasks.md 14.4) |
+| 검색 | 필드 가중치 키워드 + AI의 질의 확장 + 썸네일로 최종 선택 | 벡터 DB (Chroma, Pinecone) | 분류 시 AI가 한·영 태그를 붙이므로 키워드로 충분. 의존성과 모델 다운로드 없음. 실제 스크린샷 211장에서 검색 4–5ms |
 | OCR | Apple Vision (pyobjc 직접) | ocrmac, Tesseract | ocrmac은 한국어 옵션을 막음. Vision은 온디바이스, 무료, 한국어 품질 좋음 |
 | Photos 접근 | osxphotos (DB 사본 읽기) | PhotoKit | 읽기 전용 보장, Apple 라벨·iCloud 미리보기 경로까지 제공 |
 | 소스 | Photos + 폴더 | Photos 전용 | 안드로이드는 폴더 동기화로 지원, 권한 없이도 동작 |
@@ -77,4 +78,5 @@ Spec은 requirements-first로 시작했지만 design → tasks 순서를 지키�
 | 한국어 OCR이 "이 런 것"처럼 음절을 띄움 | 검색할 때 공백을 지우고 비교 |
 | 헤드리스 Kiro CLI가 `--trust-tools=@rollcall`로 도구를 승인하지 않음 | `@rollcall/sync_captures`처럼 도구별로 나열 (`--trust-all-tools`는 쓰지 않음) |
 | 헤드리스 실행에서 병렬 도구 호출 2건 실패 (Kiro가 재시도해 결과는 정상) | 원인을 스레드 간 공유 SQLite 연결로 보고 도구 호출을 락으로 직렬화. 이후 병렬 10개 호출에서 오류 0 (원래 실패 메시지는 남지 않아 원인은 추정) |
-| 아직 못 푼 것 | 실제 Apple/Google 캘린더 등록, 권한을 준 Photos 소스, 대량 검색 성능은 미검증 (`tasks.md` 14번) |
+| 2×2px 이미지에서 Vision이 오류를 냄 | 설계대로 빈 OCR로 저장하고 다음 캡쳐 진행 (211장 중 1장) |
+| 아직 못 푼 것 | 실제 Apple/Google 캘린더 등록, 권한을 준 Photos 소스, 5만 장 규모 성능은 미검증 (`tasks.md` 14번) |
