@@ -203,7 +203,8 @@ uv run pytest -q     # 8 passed
 | `test_db_migration_idempotent` | 스키마 버전, 마이그레이션 재실행 |
 
 테스트 밖에서 직접 확인한 것: MCP 클라이언트로 도구 9개 목록과 병렬 호출 10개(오류 0), 실제 스크린샷 211장 인덱싱, Kiro CLI 헤드리스로 분류와 .ics 일정 생성.
-아직 확인하지 않은 것: 실제 Apple·Google 캘린더 등록, 전체 디스크 접근 권한을 준 Photos 소스 (`.kiro/specs/album-mcp/tasks.md` 14번).
+실제 환경에서 확인한 것: Apple Calendar 일정 생성, launchd 자동 모드(새 캡쳐 → 약 90초 뒤 분류와 일정 등록).
+아직 확인하지 않은 것: Google 캘린더 실제 계정 등록, 전체 디스크 접근 권한을 준 Photos 소스 (`.kiro/specs/album-mcp/tasks.md` 14번).
 
 ---
 
@@ -218,4 +219,4 @@ spec(`.kiro/specs/album-mcp`), steering(`.kiro/steering/rollcall.md`), hook(`.ki
 
 | 이름 | 역할 |
 |---|---|
-| makim-414 | 기획, 개발, 발표 |
+| 김민성 ([@makim-414](https://github.com/makim-414)) | 1인 팀: 기획, 개발, 발표 전부 |
