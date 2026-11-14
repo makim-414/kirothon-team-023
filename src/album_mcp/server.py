@@ -67,16 +67,15 @@ def traced(fn):
 
 
 def _call(fn, args, kwargs):
-    if True:
-        _rid["v"] = uuid.uuid4().hex[:8]
-        log.info("call %s %s", fn.__name__, json.dumps(kwargs, ensure_ascii=False, default=str)[:500])
-        try:
-            return fn(*args, **kwargs)
-        except Exception as e:
-            log.exception("%s failed", fn.__name__)
-            raise RuntimeError(f"{type(e).__name__}: {e}") from e
-        finally:
-            _rid["v"] = "-"
+    _rid["v"] = uuid.uuid4().hex[:8]
+    log.info("call %s %s", fn.__name__, json.dumps(kwargs, ensure_ascii=False, default=str)[:500])
+    try:
+        return fn(*args, **kwargs)
+    except Exception as e:
+        log.exception("%s failed", fn.__name__)
+        raise RuntimeError(f"{type(e).__name__}: {e}") from e
+    finally:
+        _rid["v"] = "-"
 
 
 @mcp.tool()

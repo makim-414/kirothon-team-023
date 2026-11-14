@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Rollcall</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Apple SD Gothic Neo", "Pretendard", -apple-system, sans-serif; color: #1d1d1f; }
+  section { width: 1280px; height: 720px; padding: 72px 88px; page-break-after: always; position: relative; overflow: hidden; background: #fbfbfd; }
+  section.dark { background: #111; color: #f5f5f7; }
+  h1 { font-size: 104px; letter-spacing: -3px; }
+  h2 { font-size: 52px; letter-spacing: -1px; margin-bottom: 36px; }
+  h3 { font-size: 28px; margin-bottom: 10px; }
+  p, li { font-size: 28px; line-height: 1.55; }
+  .sub { font-size: 36px; color: #86868b; margin-top: 16px; }
+  .accent { color: #ffb800; }
+  .tag { display: inline-block; background: #ffb800; color: #111; padding: 4px 14px; border-radius: 8px; font-weight: 700; font-size: 22px; }
+  .foot { position: absolute; bottom: 40px; left: 88px; font-size: 20px; color: #86868b; }
+  ul { padding-left: 32px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .card { background: #fff; border-radius: 20px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .card p { font-size: 22px; color: #424245; }
+  .big { font-size: 64px; font-weight: 800; }
+  .flow { display: flex; align-items: center; gap: 18px; margin-top: 30px; }
+  .step { flex: 1; background: #fff; border-radius: 18px; padding: 24px; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .step b { display: block; font-size: 26px; margin-bottom: 8px; }
+  .step span { font-size: 19px; color: #6e6e73; }
+  .arrow { font-size: 36px; color: #ffb800; }
+  code { font-family: Menlo, monospace; font-size: 20px; background: #f0f0f3; padding: 2px 8px; border-radius: 6px; }
+  .dark code { background: #2a2a2a; color: #ffd560; }
+  pre { font-family: Menlo, monospace; font-size: 18px; background: #1d1d1f; color: #e8e8ed; padding: 22px 26px; border-radius: 14px; line-height: 1.5; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; font-size: 22px; }
+  td, th { text-align: left; padding: 10px 14px; border-bottom: 1px solid #e5e5ea; }
+  th { color: #86868b; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<section class="dark">
+  <div style="margin-top:150px">
+    <span class="tag">KIROTHON 2026 · team-023 파소</span>
+    <h1 style="margin-top:28px">Roll<span class="accent">call</span></h1>
+    <p class="sub">일하는 앨범 MCP · the album MCP that works for you</p>
+  </div>
+  <div class="foot">캡쳐만 하세요. 분류, 캘린더 등록, 다시 찾기는 Rollcall이 합니다.</div>
+</section>
+
+<section>
+  <h2>캡쳐는 "기억해 줘"인데, 앨범은 기억하지 않는다</h2>
+  <div class="grid3">
+    <div class="card"><div class="big">🔍</div><h3>다시 못 찾는다</h3><p>"지난달 캡쳐한 카페 영수증"을 찾으려면 수백 장을 스크롤해야 합니다. 앨범 검색은 날짜와 "스크린샷" 정도만 압니다.</p></div>
+    <div class="card"><div class="big">📅</div><h3>일정이 캘린더로 안 간다</h3><p>밋업 공지, 예약 확인을 캡쳐해 놓고 등록은 잊습니다. 그리고 일정을 놓칩니다.</p></div>
+    <div class="card"><div class="big">🗂️</div><h3>정리할 시간이 없다</h3><p>앨범 정리는 아무도 하지 않습니다. 캡쳐는 쌓이기만 합니다.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Rollcall: 캡쳐 한 번이면 끝</h2>
+  <div class="flow">
+    <div class="step"><b>📸 캡쳐</b><span>Mac 스크린샷 · Photos · 안드로이드 동기화 폴더</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>🔤 온디바이스 OCR</b><span>Apple Vision, 한국어·영어, 장당 약 0.5초</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>🧠 Kiro가 분류</b><span>event · insight · reference · other<br>한국어 요약 + 한·영 태그</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>📅 캘린더</b><span>Apple · Google · .ics<br>중복 등록 없음</span></div>
+  </div>
+  <div class="flow" style="margin-top:40px">
+    <div class="step" style="flex:3; text-align:left"><b>💬 "그때 캡쳐한 그거 찾아줘"</b><span>질문을 한·영 동의어로 넓혀 검색 → 후보를 번호 썸네일로 AI가 직접 보고 고름 → 원본 제공</span></div>
+  </div>
+  <p style="margin-top:36px; font-size:24px; color:#6e6e73">launchd가 스크린샷 폴더를 지켜보다 새 캡쳐가 생기면 Kiro CLI(헤드리스)가 위 과정을 끝냅니다. 사용자는 아무것도 열지 않습니다.</p>
+</section>
+
+<section>
+  <h2>실제 실행 결과</h2>
+  <div style="display:flex; gap:40px; align-items:flex-start">
+    <div style="flex:1">
+      <p style="font-size:22px; color:#6e6e73; margin-bottom:12px"><code>look_at</code>: AI에게 보여 주는 번호 그리드</p>
+      <img src="assets/look_at.jpg" style="width:100%; border-radius:14px">
+    </div>
+    <div style="flex:1.2">
+      <pre>$ album-mcp process
+synced 2 new, unfiled 2
+[tool] @rollcall/inbox
+[tool] @rollcall/file_capture ×2
+[tool] @rollcall/add_event
+filed 2, events 1</pre>
+      <table style="margin-top:18px">
+        <tr><th>kind</th><th>Kiro가 쓴 요약</th></tr>
+        <tr><td><b>event</b></td><td>AWSKRUG 11월 정기 밋업. 11/27(금) 19:00–21:00, AWS Korea 18층 성균관</td></tr>
+        <tr><td><b>reference</b></td><td>스타벅스 강남R점 카페 라떼 5,800원 카드결제 영수증</td></tr>
+      </table>
+      <p style="font-size:20px; color:#6e6e73; margin-top:12px">→ 밋업은 캘린더 일정으로 생성 (장소, 원본 캡쳐 id 포함)</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>왜 다른가</h2>
+  <table>
+    <tr><th></th><th>Rollcall</th><th>기존 방식</th></tr>
+    <tr><td><b>프라이버시</b></td><td>사진·OCR·인덱스 모두 Mac 안 SQLite. 외부 비전 API, 클라우드 벡터 DB 없음</td><td>클라우드 업로드 후 분석</td></tr>
+    <tr><td><b>이해 방식</b></td><td>대화 중인 AI가 OCR과 썸네일을 직접 보고 판단</td><td>임베딩 점수만으로 검색</td></tr>
+    <tr><td><b>범용성</b></td><td>MCP 서버: Kiro, Claude 등 어디에나. 안드로이드, Google/Outlook 캘린더 지원</td><td>특정 앱·기기 전용</td></tr>
+    <tr><td><b>노력</b></td><td>캡쳐만 하면 자동 (launchd + Kiro CLI)</td><td>앱을 열고 직접 정리</td></tr>
+    <tr><td><b>안전</b></td><td>Photos는 읽기 전용, 헤드리스는 rollcall 도구만 신뢰</td><td>–</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Kiro로 만든 방법</h2>
+  <div class="grid3">
+    <div class="card"><h3>📋 Spec</h3><p>EARS 형식 요구사항 19개. 안드로이드·다중 캘린더 요구도 spec에 먼저 추가하고 구현</p></div>
+    <div class="card"><h3>🧭 Steering</h3><p>분류 기준표, 3개 워크플로, "상대 날짜는 캡쳐 시각 기준" 같은 판단 규칙. 헤드리스 실행도 같은 규칙을 따름</p></div>
+    <div class="card"><h3>🪝 Hook</h3><p>세션 시작 시 새 캡쳐를 OCR 인덱싱하고 미분류 개수를 에이전트에 알림</p></div>
+    <div class="card"><h3>🔌 MCP</h3><p>직접 만든 <code>rollcall</code> 서버(도구 9개)를 워크스페이스 mcp.json에 등록</p></div>
+    <div class="card"><h3>⌨️ Kiro CLI</h3><p><code>--no-interactive</code> + 도구별 신뢰 목록으로 사람 없이 분류와 등록</p></div>
+    <div class="card"><h3>✅ 검증</h3><p>pytest 8개, MCP 클라이언트 병렬 호출 테스트, 실제 Kiro 헤드리스 end-to-end</p></div>
+  </div>
+</section>
+
+<section class="dark">
+  <div style="margin-top:170px">
+    <h1 style="font-size:84px">캡쳐만 하세요.</h1>
+    <p class="sub" style="margin-top:28px">나머지는 Rollcall이 합니다.</p>
+    <p style="margin-top:60px; font-size:24px; color:#86868b"><code>uv run album-mcp install-agent</code> · github.com/makim-414/team-023</p>
+  </div>
+  <div class="foot">team-023 파소 · KIROTHON 2026</div>
+</section>
+
+</body>
+</html>
