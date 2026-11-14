@@ -1,10 +1,30 @@
+# 의존성
+node_modules/
 .venv/
+venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# 빌드 결과
+dist/
+build/
+.next/
+out/
+
+# 비밀 정보: 절대 커밋하지 마세요
 .env
-*.db
-*.db-*
+.env.*
+!.env.example
+*.pem
+*.key
 google_client.json
 google_token.json
+
+# 로컬 데이터 (사진 색인 DB)
+*.db
+*.db-*
+
+# 기타
 .DS_Store
+*.log
