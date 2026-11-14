@@ -79,7 +79,7 @@
   - _Requirements: 15.2, 15.4, 18.4_
 
 - [ ] 14. 실제 환경 검증
-  - [ ] 14.1 Kiro에 전체 디스크 접근 권한을 주고 Photos 소스로 실제 스크린샷 동기화 확인
+  - [x] 14.1 전체 디스크 접근 권한을 준 뒤 Photos 소스로 실제 동기화: 보관함 42,147장(스크린샷 21,464장) 로딩 7.6초, MCP `sync_captures(limit=20)`로 최근 캡쳐 20장 색인, inbox 30장 분류(event 1, insight 9, reference 10, other 10). 최근 30일 중 72장은 아직 미색인
     - _Requirements: 1.1, 1.3, 1.5, 4.1_
   - [x] 14.2 `apple` 백엔드로 실제 일정 등록: "Rollcall" 캘린더 자동 생성, Calendar에서 다시 읽어 제목·시각(19:00–21:00)·장소·메모(capture id, 경로) 확인
     - _Requirements: 6.8, 6.9, 19.1_
@@ -89,6 +89,24 @@
     - _Requirements: 7.10_
   - [x] 14.5 `install-agent` 설치 → 감시 폴더에 예약 확인 캡쳐 1장 추가 → 약 90초 뒤 사람 조작 없이 event로 분류되고 Apple Calendar에 "을지로 00식당 예약 (4명)" 11/21 18:30 등록 확인 → 해제
     - _Requirements: 17.7_
+
+- [x] 19. sync 기본값을 "최근 30일, 최신순"으로 변경
+  - watermark 대신 `days`(기본 30) 창 안에서 미색인 캡쳐를 최신순으로 처리. `since`로 더 과거 지정 가능. MCP 도구와 CLI(`--days`) 모두
+  - 이유: Photos를 처음 열자 2017년 캡쳐부터 색인을 시작함
+  - _Requirements: 1.1, 1.8_
+
+- [x] 20. 일반 사진 찾기 `find_photos(labels, since, until, limit=40)`
+  - 보관함 전체(스크린샷 아닌 사진 포함)를 Apple 라벨(대소문자 무시, 하나라도 일치)과 날짜로 거름, 최신순, OCR·색인 없음
+  - PhotosDB와 사진 목록은 프로세스당 한 번 읽어 메모리에 둠
+  - 반환한 `photos:<uuid>` id를 `look_at`, `get_photo`, `export_photos`에서 그대로 사용
+  - steering "찾기" 절차에 캡쳐에서 못 찾으면 `find_photos` → `look_at`으로 직접 보고 고르는 단계 추가
+  - 테스트: 가짜 PhotosDB로 라벨·날짜 필터, 최신순, limit, look_at/get_photo/export (`test_find_photos_whole_library_and_reuse_ids`)
+  - 실제 검증: "차 사고 난 내 차 사진" → `search`는 관련 없는 2017년 캡쳐 1건 → `find_photos(["Bumper"])` 129장 → `look_at` 그리드 9장 중 3장을 보고 파손 사진 14장 선택 (2024-07-03 뒷범퍼 찌그러짐 9장, 2024-11-08~11 뒷범퍼 옆 들뜸 5장)
+  - _Requirements: 7.1, 7.3, 8.6, 9.1, 10.1_
+
+- [ ] 21. 남은 개선
+  - [ ] 21.1 오래 켜진 Kiro 세션에서는 메모리의 사진 목록이 갱신되지 않아 새 캡쳐를 못 봄 (서버 재시작 필요). 일정 시간마다 다시 읽기
+  - [x] 21.2 `look_at`이 없는 파일을 건너뛰면 번호가 입력 순서와 달라짐 (실제 검증 중 발생). 번호↔id 범례로 읽도록 steering에 명시
 
 - [ ] 15. 데모
   - [ ] 15.1 시연 시나리오 녹화: 밋업 초대장 캡쳐 → 캘린더 등록, "지난번 캡쳐한 영수증 찾아줘" → 그리드 → 원본

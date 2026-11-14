@@ -65,6 +65,13 @@ class Album:
             else:
                 raise ValueError(f"unknown source {s!r} (use photos, folder)")
         self._calendar = None
+        self._photos = next((s for s in self.sources if isinstance(s, PhotosSource)), None)
+
+    def photos_source(self) -> PhotosSource:
+        # find_photos works even if the photos source is not used for sync
+        if self._photos is None:
+            self._photos = PhotosSource(self.cfg.photos_library)
+        return self._photos
 
     @property
     def calendar(self):
@@ -80,19 +87,16 @@ class Album:
         return self._calendar
 
     # ---- sync -----------------------------------------------------------
-    def sync(self, since: str | None = None, limit: int = 30) -> dict:
-        """Index captures newer than `since` (default: last sync watermark).
+    def sync(self, since: str | None = None, limit: int = 30, days: int = 30) -> dict:
+        """Index captures from the last `days` days (or since `since`), newest first.
 
-        Runs OCR on at most `limit` new captures per call, oldest first, so a
-        large backlog is processed over several calls without timeouts.
+        Runs OCR on at most `limit` not-yet-indexed captures per call; call again
+        while `remaining` > 0. Already-indexed captures are skipped, so repeated
+        calls walk backwards through the window.
         """
-        if since:
-            since_dt = datetime.fromisoformat(since)
-        else:
-            wm = self.db.get_state("watermark")
-            # back off 1s: captures sharing the watermark second may be unindexed;
-            # already-indexed ones are skipped by db.has()
-            since_dt = datetime.fromisoformat(wm) - timedelta(seconds=1) if wm else None
+        since_dt = datetime.fromisoformat(since) if since else datetime.now() - timedelta(days=days)
+        if since_dt.tzinfo:
+            since_dt = since_dt.astimezone().replace(tzinfo=None)
 
         errors, pending = [], []
         for src in self.sources:
@@ -100,7 +104,7 @@ class Album:
                 pending += [it for it in src.items(since_dt) if not self.db.has(it.id)]
             except SourceUnavailable as e:
                 errors.append({"source": src.name, "error": str(e)})
-        pending.sort(key=lambda it: it.created_at)
+        pending.sort(key=lambda it: it.created_at, reverse=True)
 
         added = []
         for it in pending[:limit]:
@@ -118,14 +122,12 @@ class Album:
             added.append({"id": it.id, "created_at": row["created_at"], "path": it.path})
 
         remaining = len(pending) - len(added)
-        if added and not since:
-            # only advance the watermark once everything up to it is indexed
-            self.db.set_state("watermark", added[-1]["created_at"])
         self.db.set_state("last_sync", datetime.now().isoformat(timespec="seconds"))
         return {
             "added": added,
             "remaining": remaining,
             "unfiled_total": self.db.count_unfiled(),
+            "window_since": since_dt.isoformat(timespec="seconds"),
             "errors": errors,
         }
 
@@ -177,20 +179,58 @@ class Album:
             raise KeyError(f"unknown capture id {capture_id}")
         return c
 
+    def _resolve(self, capture_id: str) -> dict | None:
+        """Indexed capture from the DB, or any Photos library photo by `photos:<uuid>`."""
+        c = self.db.get(capture_id)
+        if c:
+            return {"capture": c, "path": c.path, "filename": c.filename, "created_at": c.created_at,
+                    "size": [c.width, c.height], "file_size": c.size_bytes}
+        if capture_id.startswith("photos:"):
+            try:
+                it = self.photos_source().get(capture_id.split(":", 1)[1])
+            except SourceUnavailable:
+                return None
+            if it:
+                return {"capture": None, "path": it.path, "filename": it.filename,
+                        "created_at": it.created_at.isoformat(timespec="seconds"),
+                        "size": [it.width, it.height], "file_size": it.size_bytes, "labels": it.labels}
+        return None
+
+    def find_photos(self, labels: list[str], since: str | None = None, until: str | None = None, limit: int = 40) -> list[dict]:
+        if until and len(until) == 10:
+            until += "T23:59:59"
+        items = self.photos_source().find(
+            labels,
+            datetime.fromisoformat(since) if since else None,
+            datetime.fromisoformat(until) if until else None,
+            max(1, min(limit, 200)),
+        )
+        return [{"id": it.id, "created_at": it.created_at.isoformat(timespec="seconds"),
+                 "filename": it.filename, "labels": it.labels} for it in items]
+
     def look_at(self, ids: list[str]) -> tuple[bytes, list[dict]]:
-        caps = [c for c in (self.db.get(i) for i in ids[:16]) if c and Path(c.path).exists()]
-        if not caps:
+        found = []
+        for i in ids[:16]:
+            r = self._resolve(i)
+            if r and Path(r["path"]).exists():
+                found.append((i, r))
+        if not found:
             raise KeyError("none of the ids exist")
-        legend = [{"n": i + 1, "id": c.id, "created_at": c.created_at, "summary": c.summary} for i, c in enumerate(caps)]
-        return preview.grid([c.path for c in caps]), legend
+        legend = [{"n": n + 1, "id": i, "created_at": r["created_at"],
+                   "summary": r["capture"].summary if r["capture"] else None} for n, (i, r) in enumerate(found)]
+        return preview.grid([r["path"] for _, r in found]), legend
 
     def get_photo(self, capture_id: str, max_side: int = 1600) -> tuple[bytes, dict]:
-        c = self._require(capture_id)
-        data, (w, h) = preview.to_jpeg(c.path, max_side=max_side, quality=90)
-        meta = c.brief(ocr_chars=4000)
-        meta.update(
-            {"path": c.path, "original_size": [c.width, c.height], "file_size": c.size_bytes, "returned_size": [w, h]}
-        )
+        r = self._resolve(capture_id)
+        if not r:
+            raise KeyError(f"unknown capture id {capture_id}")
+        data, (w, h) = preview.to_jpeg(r["path"], max_side=max_side, quality=90)
+        if r["capture"]:
+            meta = r["capture"].brief(ocr_chars=4000)
+        else:
+            meta = {"id": capture_id, "created_at": r["created_at"], "filename": r["filename"],
+                    "labels": r["labels"], "indexed": False}
+        meta.update({"path": r["path"], "original_size": r["size"], "file_size": r["file_size"], "returned_size": [w, h]})
         return data, meta
 
     def export_photos(self, ids: list[str], folder: str) -> list[str]:
@@ -198,17 +238,17 @@ class Album:
         dest.mkdir(parents=True, exist_ok=True)
         out = []
         for i in ids:
-            c = self.db.get(i)
-            if not c or not Path(c.path).exists():
+            r = self._resolve(i)
+            if not r or not Path(r["path"]).exists():
                 continue
-            stem, ext = Path(c.filename).stem, Path(c.path).suffix
-            base = f"{stem}_{c.id.replace(':', '-')}"
+            stem, ext = Path(r["filename"]).stem, Path(r["path"]).suffix
+            base = f"{stem}_{i.replace(':', '-')}"
             target = dest / f"{base}{ext}"
             n = 1
             while target.exists():  # never overwrite (Req 10.7)
                 target = dest / f"{base}_{n}{ext}"
                 n += 1
-            shutil.copy2(c.path, target)
+            shutil.copy2(r["path"], target)
             out.append(str(target))
         return out
 
@@ -219,6 +259,5 @@ class Album:
             "folders": self.cfg.folders,
             "calendar_backend": self.cfg.calendar,
             "last_sync": self.db.get_state("last_sync"),
-            "watermark": self.db.get_state("watermark"),
             "db": str(self.cfg.db_path),
         }

@@ -1,7 +1,7 @@
 """Command line entry point.
 
   album-mcp                 run the MCP server (stdio)
-  album-mcp sync [--limit]  index new captures now (no AI needed)
+  album-mcp sync [--limit] [--days 30] [--since]  index recent captures, newest first (no AI)
   album-mcp status          counts and config
   album-mcp process         sync, then have Kiro CLI file the inbox and add events
   album-mcp install-agent   run `process` automatically on every new screenshot (launchd)
@@ -98,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("sync")
     s.add_argument("--limit", type=int, default=30)
     s.add_argument("--since")
+    s.add_argument("--days", type=int, default=30)
     sub.add_parser("status")
     pr = sub.add_parser("process")
     pr.add_argument("--limit", type=int, default=30)
@@ -116,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "sync":
         from .core import Album
 
-        _print(Album().sync(a.since, a.limit))
+        _print(Album().sync(a.since, a.limit, a.days))
     elif a.cmd == "status":
         from .core import Album
 

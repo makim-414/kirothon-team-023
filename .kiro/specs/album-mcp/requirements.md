@@ -42,14 +42,14 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls sync_captures with an ISO 8601 `since` timestamp, THE Album_MCP_Server SHALL find up to 1000 Screenshots created after the `since` timestamp and, for each Screenshot not yet stored, extract OCR_Text and Apple_Label and store the OCR_Text and Apple_Label in the Classification_DB — **[구현 변경]** 한 번에 최대 1000개가 아니라 호출당 `limit`(기본 30)개만 OCR하고 `remaining`을 돌려줌. 남은 것은 다시 호출해 처리
+1. WHEN the AI_Assistant calls sync_captures with an ISO 8601 `since` timestamp, THE Album_MCP_Server SHALL find up to 1000 Screenshots created after the `since` timestamp and, for each Screenshot not yet stored, extract OCR_Text and Apple_Label and store the OCR_Text and Apple_Label in the Classification_DB — **[구현 변경]** 한 번에 최대 1000개가 아니라 호출당 `limit`(기본 30)개만 OCR하고 `remaining`을 돌려줌. 남은 것은 다시 호출해 처리. `since`가 없으면 최근 `days`(기본 30)일, 최신순 (tasks 19)
 2. IF the `since` value is malformed or later than the current time, THEN THE Album_MCP_Server SHALL return an error indicating an invalid timestamp — **[이번 범위 제외]** `since` 형식·미래 시각 검증 없음 (잘못된 형식은 파이썬 ValueError로 실패)
 3. THE Album_MCP_Server SHALL identify Screenshots using the osxphotos screenshot flag and exclude other media from capture synchronization
 4. WHEN sync_captures completes, THE Album_MCP_Server SHALL return for each synchronized Screenshot the id, the creation date in ISO 8601 format, and whether a local original or only a Local_Preview was available — **[이번 범위 제외]** 원본/Local_Preview 여부는 결과에 넣지 않음. id, 생성 시각, 경로만 반환
 5. WHEN the original file of a Screenshot exists only in iCloud, THE Album_MCP_Server SHALL use the Local_Preview and SHALL NOT download the original
 6. WHEN no new Screenshots exist after the `since` timestamp, THE Album_MCP_Server SHALL return an empty result without an error
 7. WHEN sync_captures is run again over an already synchronized period, THE Album_MCP_Server SHALL keep exactly one capture record per Screenshot in the Classification_DB
-8. WHEN the AI_Assistant calls sync_captures without a `since` value, THE Album_MCP_Server SHALL use the last successful sync time stored in the Classification_DB
+8. WHEN the AI_Assistant calls sync_captures without a `since` value, THE Album_MCP_Server SHALL use the last successful sync time stored in the Classification_DB — **[구현 변경]** 마지막 동기화 시각 대신 최근 30일 창을 쓰고 이미 색인한 캡쳐는 건너뜀 (tasks 19)
 
 ### Requirement 2: Unprocessed Capture Queue
 
@@ -123,9 +123,9 @@ Rollcall (package `album-mcp`) is an MCP (Model Context Protocol) server that co
 
 #### Acceptance Criteria
 
-1. WHEN the AI_Assistant calls search with a query, THE Album_MCP_Server SHALL search all Captures in the Photos_Library, including Screenshots and General_Photos — **[이번 범위 제외]** General_Photos는 인덱싱하지 않음. Photos 소스는 스크린샷만 가져옴
+1. WHEN the AI_Assistant calls search with a query, THE Album_MCP_Server SHALL search all Captures in the Photos_Library, including Screenshots and General_Photos — **[구현 변경]** `search`는 색인된 스크린샷만 검색. General_Photos는 별도 도구 `find_photos`로 보관함 전체를 Apple 라벨·날짜로 찾음 (색인 없음, tasks 20)
 2. WHEN search evaluates a Screenshot, THE Album_MCP_Server SHALL match the query against summary, tags, OCR_Text, and Apple_Label
-3. WHEN search evaluates a General_Photo, THE Album_MCP_Server SHALL match the query against Apple_Label, date, and place metadata from osxphotos — **[이번 범위 제외]** General_Photo 검색(날짜·장소 메타데이터)은 구현하지 않음
+3. WHEN search evaluates a General_Photo, THE Album_MCP_Server SHALL match the query against Apple_Label, date, and place metadata from osxphotos — **[구현 변경]** `find_photos`가 Apple_Label과 날짜로 General_Photo를 거름. 장소 메타데이터는 미사용
 4. THE Album_MCP_Server SHALL match query terms by case-insensitive substring comparison
 5. THE Album_MCP_Server SHALL score each match with field weights of 4 for summary, 3 for tags, 2 for OCR_Text, and 1 for Apple_Label — **[구현 변경]** 가중치는 tags 4, summary 3, Apple_Label 2, OCR 1, 파일명 0.5. AI가 붙인 태그를 가장 믿을 만한 신호로 봄. 한 필드 안 반복은 3회까지만 셈
 6. WHEN kind is specified, THE Album_MCP_Server SHALL return only classified Captures of that Capture_Kind

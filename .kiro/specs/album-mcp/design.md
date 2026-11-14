@@ -62,6 +62,8 @@ class Source(Protocol):
 | `PhotosSource` | `photos:<uuid>` | Photos의 촬영 시각 (로컬, naive) | `p.screenshot`인 이미지만. 원본이 iCloud에만 있으면 `path_derivatives` 중 존재하는 첫 파일(가장 큰 미리보기) 사용 |
 | `FolderSource` | `folder:<sha1(절대경로)[:16]>` | 파일 mtime | png, jpg, jpeg, heic, webp. 하위 폴더 포함. `ALBUM_MCP_FOLDERS`(`:` 구분) |
 
+`PhotosSource`는 PhotosDB와 이미지 목록을 프로세스당 한 번만 읽어 메모리에 둡니다 (실측 42,147장 7.6초). 대신 오래 켜진 서버는 새 사진을 보지 못합니다 (tasks 21.1).
+
 Photos 라이브러리를 열 수 없으면(전체 디스크 접근 권한 없음) `SourceUnavailable`을 던지고, `Album.sync`는 이를 `errors`에 담아 돌려준 뒤 나머지 소스로 계속 진행합니다.
 
 ### ocr.py: 온디바이스 OCR
@@ -125,12 +127,14 @@ end를 생략하면 시각 일정은 +1시간, 종일 일정은 같은 날로 �
 
 | 메서드 | 동작 |
 |---|---|
-| `sync(since, limit=30)` | 모든 소스에서 `since`(없으면 watermark − 1초) 이후 항목 중 DB에 없는 것을 오래된 순으로 최대 `limit`개 OCR해 저장. `since`를 안 줬을 때만 watermark를 마지막 처리 시각으로 올림. `{added, remaining, unfiled_total, errors}` |
+| `sync(since, limit=30, days=30)` | 모든 소스에서 `since`(없으면 지금 − `days`일) 이후 항목 중 DB에 없는 것을 **최신순**으로 최대 `limit`개 OCR해 저장. 다시 부르면 이미 색인한 것을 건너뛰고 더 과거로 진행. `{added, remaining, unfiled_total, window_since, errors}` |
 | `inbox(n)` | 미분류를 오래된 순으로 1–50개, OCR 1500자까지 |
 | `file_capture` | 공백 정리 후 `DB.file` |
 | `add_event` | 캡쳐 확인 → `build_event` → (capture, backend, start) 중복이면 `already_added` → 백엔드 호출 → `events`에 기록 |
 | `search` | 필터 조회 후 `search.rank`. `until`이 날짜만 있으면 그날 23:59:59까지 |
-| `look_at(ids)` | 앞 16개 중 존재하는 것만 그리드로, 번호↔id 범례와 함께 |
+| `find_photos(labels, since, until, limit=40)` | `PhotosSource.find`: 보관함 전체 이미지(스크린샷 포함)를 Apple 라벨(소문자 비교, 하나라도 일치)과 날짜로 걸러 최신순 id 목록. 색인·OCR 없음 |
+| `_resolve(id)` | DB의 캡쳐, 없으면 `photos:<uuid>`를 Photos 보관함에서 찾아 경로·메타데이터 반환. `look_at`, `get_photo`, `export_photos`가 사용 |
+| `look_at(ids)` | 앞 16개 중 존재하는 것만 그리드로, 번호↔id 범례와 함께 (없는 파일을 건너뛰면 번호가 입력 순서와 달라지므로 범례로 읽어야 함) |
 | `get_photo(id, max_side=1600)` | JPEG q90 + 메타데이터(OCR 4000자까지) |
 | `export_photos(ids, folder)` | `{stem}_{id에서 :를 -로}{ext}`로 복사, 없는 id는 건너뜀 |
 | `status()` | 종류별 개수, 이벤트 수, 설정, 마지막 동기화 |

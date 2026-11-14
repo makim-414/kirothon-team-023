@@ -44,7 +44,21 @@ For each capture filed as `event`:
 2. `search(query, kind?, since?, until?)` — set `since/until` when the user gives a period
    ("지난달", "여름에"). If nothing comes back, try broader terms once.
 3. `look_at` the top 8–12 ids, pick the right one(s) visually.
-4. `get_photo(id)` to show it, or `export_photos(ids, folder)` if they want files.
+4. **Not found in captures** (search is empty after the broader retry, or nothing in
+   `look_at` fits, or the user means a regular photo — "내 차 사진", "강아지 사진"):
+   `search` only covers indexed screenshots. Call `find_photos(labels, since?, until?)`
+   on the whole Photos library:
+   - labels are English Apple labels; give several synonyms
+     (car → `["Car","Vehicle","Automobile"]`, damage → add `["Bumper","Tire","Wheel"]`;
+     dog → `["Dog","Pet"]`; food → `["Food","Dish","Meal"]`; receipt → `["Document","Receipt"]`).
+   - Apple has no "accident" or "damage" label: pick the object label, narrow by date
+     if the user gives one, then judge damage/context yourself in `look_at`.
+   - `look_at` the candidates 16 at a time (newest first) and choose visually. Map grid
+     numbers to ids with the legend `look_at` returns, not the order you sent (missing
+     files are skipped and shift the numbers). Stop when
+     you have clear matches; if 3 grids show nothing, ask the user for a date range.
+5. `get_photo(id)` to show it, or `export_photos(ids, folder)` if they want files.
+   Both accept `find_photos` ids.
 
 ## When a tool fails
 
@@ -59,7 +73,9 @@ For each capture filed as `event`:
 | add_event | invalid date / start after end | re-read the capture (`get_photo`), fix, retry once; else file as `reference` and skip |
 | add_event | calendar permission / Google setup | abort events for this run; tell the user the setting named in the error |
 | add_event | `already_added` | not an error; skip |
-| search | empty result | retry once with broader terms; then tell the user nothing matched |
+| search | empty result | retry once with broader terms; then `find_photos` (retrieve step 4) |
+| find_photos | Full Disk Access error | tell the user how to grant it; abort |
+| find_photos | empty result | drop the date filter or add synonym labels once; then ask the user |
 | get_photo / export_photos | unknown id or unreadable file | skip that id and say which ones were skipped |
 
 Never retry a call more than once with the same arguments. A capture that failed to file stays in `inbox` for the next run.
@@ -69,4 +85,6 @@ Never retry a call more than once with the same arguments. A capture that failed
 - "어제 찍은 캡쳐 정리해줘" → workflow 1, then 2 for events.
 - "지난주에 본 회의 일정 캘린더에 넣었어?" → `search("회의 meeting 일정", kind="event", since=...)`.
 - "전에 캡쳐한 와이파이 비번" → `search("wifi 와이파이 비밀번호 password")` → `get_photo`.
+- "차 사고 난 내 차 사진" → `search("사고 accident 차 car")` finds nothing →
+  `find_photos(["Car","Vehicle","Automobile","Bumper"])` → `look_at` 16 at a time → pick dented/damaged car → `get_photo`.
 - "디자인 레퍼런스 모아서 ~/Desktop/refs에" → `search(..., kind="insight")` → `look_at` → `export_photos`.

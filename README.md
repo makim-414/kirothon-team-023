@@ -49,15 +49,16 @@
 
 | 기능 | 해결하는 불편 | 코드 위치 |
 |---|---|---|
-| 자동 수집: macOS Photos 스크린샷 + 이미지 폴더(안드로이드 동기화 폴더 포함) | 정리할 시간이 없다 | `src/album_mcp/sources.py`, `core.py` `sync` |
+| 자동 수집: macOS Photos 스크린샷 + 이미지 폴더(안드로이드 동기화 폴더 포함). 기본 최근 30일, 최신순 | 정리할 시간이 없다 | `src/album_mcp/sources.py`, `core.py` `sync` |
 | 온디바이스 OCR: Apple Vision으로 한국어·영어 추출 (실측 장당 0.21초) | 다시 못 찾는다 | `src/album_mcp/ocr.py` |
 | AI 분류: event / insight / reference / other, 한국어 요약, 한·영 태그 | 정리할 시간이 없다 | `server.py` `file_capture`, `.kiro/steering/rollcall.md` |
 | 캘린더 자동 등록: Apple Calendar, Google Calendar, .ics 중 선택, 중복 등록 없음 | 일정이 캘린더로 안 간다 | `src/album_mcp/calendars.py`, `core.py` `add_event` |
 | 의미 검색: 질문을 한·영 동의어로 넓혀 요약·태그·OCR·Apple 라벨 검색 (실측 4–5ms) | 다시 못 찾는다 | `src/album_mcp/search.py` |
+| 일반 사진 찾기: 스크린샷이 아닌 사진까지 보관함 전체에서 Apple 라벨(Car, Dog 등)과 날짜로 후보를 뽑음. 색인 없이 바로 (실측 4만 2천 장 보관함, 로딩 7.6초) | 다시 못 찾는다 ("내 차 사고 난 사진"처럼 캡쳐가 아닌 사진) | `sources.py` `PhotosSource.find`, `server.py` `find_photos` |
 | 눈으로 고르기: 후보를 번호 썸네일 그리드로 보여 주고 AI가 직접 골라 원본 제공 | 다시 못 찾는다 | `src/album_mcp/preview.py`, `server.py` `look_at`, `get_photo` |
 | 완전 자동 모드: 새 캡쳐가 생기면 launchd가 Kiro CLI로 분류와 등록을 끝냄 | 셋 모두 (사용자가 아무것도 열지 않음) | `src/album_mcp/cli.py` `process`, `install-agent` |
 
-MCP 도구: `sync_captures`, `inbox`, `file_capture`, `add_event`, `search`, `look_at`, `get_photo`, `export_photos`, `album_status`
+MCP 도구: `sync_captures`, `inbox`, `file_capture`, `add_event`, `search`, `find_photos`, `look_at`, `get_photo`, `export_photos`, `album_status`
 
 ## 3. 사용 시나리오
 

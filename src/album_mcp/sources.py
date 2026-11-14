@@ -77,6 +77,7 @@ class PhotosSource:
         self.library = library
         self.screenshots_only = screenshots_only
         self._db = None
+        self._images_cache = None
 
     def _photosdb(self):
         if self._db is None:
@@ -99,27 +100,65 @@ class PhotosSource:
                 return d
         return None
 
+    def _item(self, p) -> Item | None:
+        path = self._best_path(p)
+        if not path:
+            return None
+        return Item(
+            id=f"photos:{p.uuid}",
+            source=self.name,
+            path=path,
+            filename=p.original_filename or Path(path).name,
+            created_at=_local_naive(p.date),
+            width=p.width,
+            height=p.height,
+            size_bytes=p.original_filesize,
+            labels=list(p.labels or []),
+        )
+
+    def _images(self) -> list:
+        """All still images, read once per process and kept in memory."""
+        if self._images_cache is None:
+            self._images_cache = self._photosdb().photos(images=True, movies=False)
+        return self._images_cache
+
     def items(self, since: datetime | None) -> Iterator[Item]:
-        db = self._photosdb()
-        kw = {"from_date": since.astimezone()} if since else {}
-        photos = db.photos(images=True, movies=False, **kw)
-        for p in photos:
+        for p in self._images():
             if self.screenshots_only and not p.screenshot:
                 continue
-            path = self._best_path(p)
-            if not path:
+            if since and _local_naive(p.date) <= since:
                 continue
-            yield Item(
-                id=f"photos:{p.uuid}",
-                source=self.name,
-                path=path,
-                filename=p.original_filename or Path(path).name,
-                created_at=_local_naive(p.date),
-                width=p.width,
-                height=p.height,
-                size_bytes=p.original_filesize,
-                labels=list(p.labels or []),
-            )
+            it = self._item(p)
+            if it:
+                yield it
+
+    def find(self, labels: list[str], since: datetime | None, until: datetime | None, limit: int) -> list[Item]:
+        """Whole library (not only screenshots), filtered by Apple labels and date.
+        A photo matches if it has any of `labels` (case-insensitive). Newest first. No OCR."""
+        want = {l.strip().lower() for l in labels if l.strip()}
+        hits = []
+        for p in self._images():
+            d = _local_naive(p.date)
+            if since and d < since:
+                continue
+            if until and d > until:
+                continue
+            if want and not (want & set(p.labels_normalized or [])):
+                continue
+            hits.append(p)
+        hits.sort(key=lambda p: p.date, reverse=True)
+        out = []
+        for p in hits:
+            it = self._item(p)
+            if it:
+                out.append(it)
+            if len(out) >= limit:
+                break
+        return out
+
+    def get(self, uuid: str) -> Item | None:
+        p = self._photosdb().get_photo(uuid)
+        return self._item(p) if p else None
 
 
 class FolderSource:

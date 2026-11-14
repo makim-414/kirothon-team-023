@@ -1,5 +1,6 @@
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -27,10 +28,11 @@ def _img(path: Path, text: str, mtime: float):
 def album(tmp_path):
     shots = tmp_path / "shots"
     shots.mkdir()
-    base = datetime(2026, 11, 1, 10, 0).timestamp()
+    base = (datetime.now() - timedelta(days=5)).timestamp()
     _img(shots / "a.png", "Starbucks receipt 5,800", base)
     _img(shots / "b.png", "Meeting Nov 20 7pm", base + 60)
     _img(shots / "c.png", "Hello world", base + 120)
+    _img(shots / "old.png", "Old capture", (datetime.now() - timedelta(days=60)).timestamp())
     cfg = Config(
         sources=["folder"],
         folders=[str(shots)],
@@ -42,12 +44,15 @@ def album(tmp_path):
     return Album(cfg)
 
 
-def test_sync_is_incremental_and_ordered(album):
+def test_sync_is_recent_newest_first_and_incremental(album):
     r = album.sync(limit=2)
-    assert len(r["added"]) == 2 and r["remaining"] == 1
+    names = [Path(a["path"]).name for a in r["added"]]
+    assert names == ["c.png", "b.png"] and r["remaining"] == 1  # newest first, old.png outside 30 days
     r = album.sync(limit=10)
-    assert len(r["added"]) == 1 and r["remaining"] == 0
+    assert [Path(a["path"]).name for a in r["added"]] == ["a.png"] and r["remaining"] == 0
     assert album.sync()["added"] == []
+    r = album.sync(since=(datetime.now() - timedelta(days=90)).isoformat())
+    assert [Path(a["path"]).name for a in r["added"]] == ["old.png"]
     ids = [c["created_at"] for c in album.inbox(10)]
     assert ids == sorted(ids)
 
@@ -114,3 +119,44 @@ def test_db_migration_idempotent(tmp_path):
     DB(tmp_path / "x.db")
     db = DB(tmp_path / "x.db")
     assert db.conn.execute("PRAGMA user_version").fetchone()[0] == 1
+
+
+class FakePhotosDB:
+    def __init__(self, photos):
+        self._p = photos
+
+    def photos(self, **kw):
+        return self._p
+
+    def get_photo(self, uuid):
+        return next((p for p in self._p if p.uuid == uuid), None)
+
+
+def _photo(uuid, path, when, labels, screenshot=False):
+    return SimpleNamespace(uuid=uuid, path=str(path), ismissing=False, path_derivatives=[], original_filename=Path(path).name,
+                           date=when, width=900, height=300, original_filesize=1, labels=labels,
+                           labels_normalized=[l.lower() for l in labels], screenshot=screenshot)
+
+
+def test_find_photos_whole_library_and_reuse_ids(album, tmp_path):
+    shots = tmp_path / "shots"
+    now = datetime.now()
+    lib = [
+        _photo("CAR1", shots / "a.png", now - timedelta(days=400), ["Car", "Vehicle", "Outdoor"]),
+        _photo("CAR2", shots / "b.png", now - timedelta(days=10), ["Automobile"]),
+        _photo("DOG1", shots / "c.png", now - timedelta(days=3), ["Dog"]),
+        _photo("SHOT", shots / "old.png", now - timedelta(days=1), ["Document"], screenshot=True),
+    ]
+    src = album.photos_source()
+    src._db = FakePhotosDB(lib)
+    hits = album.find_photos(["car", "VEHICLE", "automobile"])
+    assert [h["id"] for h in hits] == ["photos:CAR2", "photos:CAR1"]  # any label, case-insensitive, newest first
+    assert [h["id"] for h in album.find_photos(["Car"], since=(now - timedelta(days=30)).date().isoformat())] == []
+    assert album.find_photos(["Car", "Automobile"], limit=1)[0]["id"] == "photos:CAR2"
+    assert album.db.count_unfiled() == 0  # nothing indexed
+    data, legend = album.look_at([h["id"] for h in hits])
+    assert data[:2] == b"\xff\xd8" and [x["id"] for x in legend] == ["photos:CAR2", "photos:CAR1"]
+    _, meta = album.get_photo("photos:CAR1")
+    assert meta["indexed"] is False and "Car" in meta["labels"]
+    out = album.export_photos(["photos:CAR1", "photos:NOPE"], str(tmp_path / "exp"))
+    assert len(out) == 1 and Path(out[0]).name == "a_photos-CAR1.png"

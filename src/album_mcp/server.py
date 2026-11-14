@@ -80,13 +80,13 @@ def _call(fn, args, kwargs):
 
 @mcp.tool()
 @traced
-def sync_captures(since: str | None = None, limit: int = 30) -> dict:
-    """Find new screenshots/photos and index them (on-device OCR + Apple labels).
+def sync_captures(since: str | None = None, limit: int = 30, days: int = 30) -> dict:
+    """Find new screenshots and index them (on-device OCR + Apple labels), newest first.
 
-    since: ISO date-time; default is where the last sync stopped.
-    limit: max new captures to OCR in this call (~0.5s each). If `remaining` > 0, call again.
+    Default window is the last `days` (30) days; pass `since` (ISO date-time) to go further back.
+    limit: max new captures to OCR in this call (~0.2s each). If `remaining` > 0, call again.
     """
-    return album().sync(since, limit)
+    return album().sync(since, limit, days)
 
 
 @mcp.tool()
@@ -132,6 +132,20 @@ def search(query: str, kind: str | None = None, since: str | None = None, until:
     Returns up to 50 results ranked by relevance; use look_at to see them.
     """
     return album().search(query, kind, since, until, limit)
+
+
+@mcp.tool()
+@traced
+def find_photos(labels: list[str], since: str | None = None, until: str | None = None, limit: int = 40) -> list[dict]:
+    """Candidates from the WHOLE Photos library (regular photos too, not only screenshots),
+    by Apple labels and date. Not indexed, no OCR. Use when search finds nothing.
+
+    labels: English Apple labels; a photo matches if it has any of them, e.g.
+      car: ["Car","Vehicle","Automobile"], dog: ["Dog","Pet"], food: ["Food","Dish"].
+    since/until: ISO dates. Returns newest first, up to `limit` (max 200).
+    Pass the ids to look_at (16 at a time) to see them; get_photo and export_photos accept them.
+    """
+    return album().find_photos(labels, since, until, limit)
 
 
 @mcp.tool()
