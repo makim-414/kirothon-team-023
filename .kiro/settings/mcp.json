@@ -2,22 +2,54 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"],
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ],
       "disabled": false,
       "autoApprove": []
     },
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
       "disabled": false,
       "autoApprove": []
     },
     "aws-docs": {
       "command": "uvx",
-      "args": ["awslabs.aws-documentation-mcp-server@latest"],
-      "env": { "FASTMCP_LOG_LEVEL": "ERROR" },
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
       "disabled": true,
       "autoApprove": []
+    },
+    "rollcall": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/makim/projects/kirothon-2026",
+        "album-mcp"
+      ],
+      "env": {
+        "ALBUM_MCP_FOLDERS": "~/Pictures/Screenshots",
+        "ALBUM_MCP_CALENDAR": "apple"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "sync_captures",
+        "inbox",
+        "search",
+        "look_at",
+        "get_photo",
+        "album_status"
+      ]
     }
   }
 }

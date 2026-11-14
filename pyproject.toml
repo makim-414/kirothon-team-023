@@ -1,0 +1,34 @@
+[project]
+name = "album-mcp"
+version = "0.1.0"
+description = "Rollcall: 일하는 앨범 MCP (the album MCP that works for you)"
+authors = [
+    { name = "Makim", email = "260162936+makim-414@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=2.3.0",
+    "osxphotos>=0.78.1",
+    "pillow>=13.0.0",
+    "pillow-heif>=1.8.1",
+    "pyobjc-framework-quartz>=13.0",
+    "pyobjc-framework-vision>=13.0",
+]
+
+[project.scripts]
+album-mcp = "album_mcp.server:main"
+
+[project.optional-dependencies]
+google = [
+    "google-api-python-client>=2.202.0",
+    "google-auth-oauthlib>=1.5.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
